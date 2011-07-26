@@ -120,7 +120,11 @@ void process_frame(int t, const char *fname)
             }
             ang /= count; ang -= 1.0;
             ang2 /= count; ang2 -= 2.0;
-            if (fabs(ang - M_PI/2) < 0.05) { fputs("Using ang2.\n", stderr); ang = ang2; }
+            if (fabs(ang - M_PI/2) < 0.1) { fputs("Using ang2.\n", stderr); ang = ang2; }
+#if 0
+fprintf(stderr, "%s: black line at (%d,%d), ang=%.1f (ang2=%.1f)\n", fname,
+    sh.cx, sh.cy, ang*180/M_PI, ang2*180/M_PI);
+#endif
             /* Now "ang" should be the angle of the line segment. See which
              * juggler is nearest along each of the rays heading outward from
              * (cx,cy) in the directions given by "ang" and "ang+pi". */
