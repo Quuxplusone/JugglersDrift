@@ -35,7 +35,6 @@ var can = document.getElementById('cv');
 var ctx;
 if (can.getContext) {
   ctx = can.getContext('2d');
-  setInterval("animate(ctx)", 1000/FPS);
 } else {
   document.write('Something went wrong with Canvas!');
 }
@@ -47,8 +46,14 @@ var FPS = 10;  // 20 frames per second
 <script type="text/javascript">
 var BPF = BPM / (60*FPS);  // fraction of a beat to advance, per frame
 
+document.write('BPM='+BPM+' ');
+document.write('FPS='+FPS+' ');
+document.write('BPF='+BPF+' ');
+
 for (var j in Jugglers) {
   Jugglers[j].pos_at = function(timestep) {
+    if (timestep > PatternLengthInBeats)
+      timestep -= PatternLengthInBeats;
     for (var i = 0; i < this.ts.length-1; ++i) {
       if (this.ts[i] <= timestep && timestep < this.ts[i+1]) {
         // Interpolate between the two given positions.
@@ -57,22 +62,33 @@ for (var j in Jugglers) {
         return [interpolate(p, this.x[i], this.x[i+1]), interpolate(p, this.y[i], this.y[i+1])];
       }
     }
+    document.write('Jugglers['+j+'].pos_at('+timestep+') failed! ');
   };
   Jugglers[j].facing_at = function(timestep) {
+    if (timestep > PatternLengthInBeats)
+      timestep -= PatternLengthInBeats;
     for (var i = 0; i < this.ts.length-1; ++i) {
       if (this.ts[i] <= timestep && timestep < this.ts[i+1]) {
-        // Interpolate between the two given positions.
+        // Interpolate between the two given facings.
         var ts_diff = this.ts[i+1] - this.ts[i];
         var p = (timestep - this.ts[i]) / ts_diff;
         return [interpolate(p, this.fx[i], this.fx[i+1]), interpolate(p, this.fy[i], this.fy[i+1])];
       }
     }
+    document.write('Jugglers['+j+'].facing_at('+timestep+') failed! ');
+  };
+  Jugglers[j].hand_at = function(rhand, timestep, r) {
+    var [x,y] = this.pos_at(timestep);
+    var [fx,fy] = this.facing_at(timestep);
+    var angle = Math.atan2(fy-y, fx-x);
+    angle += (rhand ? +1 : -1);
+    return [x + 1.6*r*Math.cos(angle), y + 1.6*r*Math.sin(angle)];
   };
 }
 
 
 var timestep = 1;
-function animate(ctx) {
+function animate() {
   ctx.clearRect(0,0, can.width, can.height);
 
   timestep += BPF;
@@ -94,16 +110,17 @@ function animate(ctx) {
       // interpolated between the given jugglers.
       var ts_diff = pass.end - pass.start;
       var p = (timestep - pass.start) / ts_diff;
-      club(ctx,
-           interpolate(p, Jugglers[pass.from].pos_at(pass.start)[0],
-                          Jugglers[pass.to].pos_at(pass.end)[0]),
-           interpolate(p, Jugglers[pass.from].pos_at(pass.start)[1],
-                          Jugglers[pass.to].pos_at(pass.end)[1]),
-           JugglerSize);
+      var rhand = (pass.hand == 'r');
+      var [sx,sy] = Jugglers[pass.from].hand_at(rhand, pass.start, JugglerSize);
+      var [ex,ey] = Jugglers[pass.to].hand_at(!rhand, pass.end, JugglerSize);
+      club(ctx, interpolate(p,sx,ex), interpolate(p,sy,ey), JugglerSize);
     }
   }
-  
+
+  setTimeout(animate, 1000/FPS);  
 }
+
+animate();
 
 </script>
 
