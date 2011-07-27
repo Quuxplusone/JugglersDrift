@@ -5,3 +5,65 @@
     eyes and judgements.
                           --Reginald Scot
                           "The Discoverie of Witchcraft", 1584
+
+
+This is a piece of juggling software; namely, a juggling simulator. But while
+most juggling simulators (Jongl, JuggleAnim, etc.) focus on stationary
+siteswaps, Juggler's Drift focuses on runaround patterns --- patterns in which
+three or more jugglers interact by passing clubs, all while simultaneously
+moving around within the pattern itself.
+
+Runarounds *are* supported by Wolfgang Westerboer's JoePass! software, but
+JoePass! has a nasty tendency to crash under Wine, and besides, its myriad
+of graphical editors feels overcomplicated.
+
+My ultimate goal is to have a polished open-source juggling simulator
+comparable to JoePass!, but without the complications and crashes. It should
+be able to display single-person siteswaps; multi-person stationary patterns;
+runarounds; patterns containing doubles; patterns containing jims and zips;
+"oogles"; and patterns with holes (e.g. Shooting Star). For describing
+patterns, it should accept text input files in something very close to
+established MHN siteswap notation. For describing the footwork, I've been
+toying with the idea of something like Metafont, where you could just specify
+a few points on the path and have the software fill in some nice-looking
+splines, but that might be unwieldy, not to mention hard to implement.
+
+Right now (2011-07-27), what I've got is a program called "png2js" that
+takes a sequence of PNG "frames" and outputs (to standard output) a bit of
+Javascript that you can plug into png2js/display.html to get a 2D animated
+bird's-eye view of the pattern described by the frame sequence. You need
+a Web browser that supports HTML5 Canvas, and Javascript must be enabled.
+
+Each "frame" must be a 3-channel (RGB) image in PNG format containing the
+following graphical elements:
+
+  - A light-grayscale background (all grays from #808080 to #FFFFFF are
+    treated as equivalent and ignored).
+  - One or more "jugglers", represented as colored disks (i.e., monochromatic
+    non-grayscale regions). Each juggler must be represented by a different
+    color (e.g., "Alice is #FF0000, Bob is #FF8000"). Each frame must include
+    all of the jugglers; you can't add new jugglers in the middle of a
+    sequence, nor can you make old ones vanish.
+  - Zero or more "passes", represented as black line segments which, if
+    extended to infinity, would intersect the pair of juggler disks (one in
+    each direction) representing the two jugglers who are exchanging passes
+    on this beat. One frame may contain anywhere from zero up to N/2 passes,
+    but no juggler is allowed to be the target of two passes simultaneously.
+    In other words, the current version doesn't support "oogle" patterns.
+    Be sure that each of your black lines is thick enough to be treated as
+    one connected region!
+  - Nothing else. No extraneous shapes are allowed in any frame.
+
+Each frame represents what's happening on a single beat: the first frame
+represents the positions and passes that happen on beat 1, the second frame
+represents beat 2, etc.  At the end of the sequence, we wrap back to the
+beginning.
+
+There are sample PNG frame sequences in the directory png-patterns/.
+Run the following commands to see the 5pHavana pattern animated:
+
+    cd png2js
+    make
+    ./png2js ../png-patterns/5pHavana/*.png > ./pattern.js
+    firefox ./display.html
+
