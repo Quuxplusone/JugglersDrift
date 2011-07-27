@@ -263,10 +263,13 @@ void infer_facings()
                 const double ra = atan2(ja.fy - ja.y, ja.fx - ja.x);
                 const double rb = atan2(jb.fy - jb.y, jb.fx - jb.x);
                 /* Smoothly rotate between ra and rb. */
-                const double r = (a*rb + b*ra) / (a+b);
+                double rdiff = (rb - ra);
+                while (rdiff < 0) rdiff += 2*M_PI;
+                if (rdiff > M_PI) rdiff -= 2*M_PI;
+                const double r = a*rdiff / (a+b);
                 FrameJuggler &j = g_Frames[t].jugglers[ji];
-                j.fx = j.x + 10*cos(r);
-                j.fy = j.y + 10*sin(r);
+                j.fx = j.x + 100*cos(ra+r);
+                j.fy = j.y + 100*sin(ra+r);
             }
         }
     }
