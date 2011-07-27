@@ -25,6 +25,7 @@ static void do_error(const char *fmt, ...)
 static int BPM = 100;
 static int FPS = 20;
 static int COUNT = 2;
+static double JOINING_ROTATION = 0.0;
 
 struct FrameJuggler {
     std::string name;
@@ -51,7 +52,59 @@ struct Frame {
           if (jugglers[i].name == s) return &jugglers[i];
         return NULL;
     }
+    int getJugglerIdx(const std::string &s) const {
+        for (int i=0; i < (int)jugglers.size(); ++i)
+          if (jugglers[i].name == s) return i;
+        return -1;
+    }
+    void center_of_mass(double &cx, double &cy) const;
+    void spin_clockwise(double deg);
 };
+
+void Frame::center_of_mass(double &cx_, double &cy_) const
+{
+    double cx = 0, cy = 0;
+    const int nJugglers = jugglers.size();
+    assert(nJugglers > 0);
+    for (int ji = 0; ji < nJugglers; ++ji) {
+        cx += jugglers[ji].x;
+        cy += jugglers[ji].y;
+    }
+    cx /= nJugglers;
+    cy /= nJugglers;
+    cx_ = cx; cy_ = cy;
+}
+
+void Frame::spin_clockwise(double deg)
+{
+    double cx, cy;
+    center_of_mass(cx, cy);
+    const int nJugglers = jugglers.size();
+    for (int ji = 0; ji < nJugglers; ++ji) {
+        /* First fix the facing. */
+        double dfx = jugglers[ji].fx - jugglers[ji].x;
+        double dfy = jugglers[ji].fy - jugglers[ji].y;
+        assert(dfx != 0.0 || dfy != 0.0);
+        double angf = atan2(dfy, dfx);
+        /* Subtract because we're spinning the pattern clockwise. */
+        double new_angf = angf - (deg * M_PI / 180);
+        jugglers[ji].fx = 100*cos(new_angf);  // TODO FIXME BUG HACK
+        jugglers[ji].fy = 100*sin(new_angf);
+
+        double dx = jugglers[ji].x - cx;
+        double dy = jugglers[ji].y - cy;
+        double r = sqrt(dx*dx + dy*dy);
+        double ang = (r==0.0) ? 0.0 : atan2(dy, dx);
+        /* Subtract because we're spinning the pattern clockwise. */
+        double new_ang = ang - (deg * M_PI / 180);
+        jugglers[ji].x = cx + r*cos(new_ang);
+        jugglers[ji].y = cy + r*sin(new_ang);
+
+        jugglers[ji].fx += jugglers[ji].x;  // TODO FIXME BUG HACK
+        jugglers[ji].fy += jugglers[ji].y;
+    }
+}
+
 
 std::vector<Frame> g_Frames;
 
@@ -76,6 +129,7 @@ void process_frame(int t, const char *fname)
     /* Find connected regions of the same color.
      * This routine automatically ignores light-gray tracery. */
     std::vector<Shape> all_shapes = find_shapes_in_image(im, w, h);
+    free(im);
     /* Classify each remaining shape as a juggler or a pass. */
     double avg_juggler_radius = 0.0;
     for (int i=0; i < (int)all_shapes.size(); ++i) {
@@ -209,7 +263,7 @@ void sort_and_sanity_check()
             do_error("Frame \"%s\" has %d jugglers instead of %d!",
                 f.filename.c_str(), (int)f.jugglers.size(), nJugglers);
         }
-        for (int ji = 0; ji < (int)f.jugglers.size(); ++ji) {
+        for (int ji = 0; ji < nJugglers; ++ji) {
             if (f.jugglers[ji].name != g_Frames[0].jugglers[ji].name) {
                 do_error("Frame \"%s\" has no juggler named %s!",
                     f.filename.c_str(), g_Frames[0].jugglers[ji].name.c_str());
@@ -220,6 +274,45 @@ void sort_and_sanity_check()
                 g_Frames[0].filename.c_str(), f.filename.c_str());
         }
     }
+
+    /* The user might have provided us with only half of the pattern, or
+     * even only 1/nJugglers'th of the pattern. For each juggler in the
+     * final frame, check what's the nearest juggler in the first frame.
+     * If everybody matches up, then great, we've got the whole pattern;
+     * but if there are any cycles in the nearest-juggler graph, then
+     * rotate each of those cycles and splice the rotated pattern onto
+     * the end of this one. */
+
+    /* Take the first frame and spin the pattern by JOINING_ROTATION;
+     * this covers the case where the user has given us only the first
+     * 1/4 of Havana, for example. */
+    Frame newFrame = g_Frames[0];
+    newFrame.spin_clockwise(JOINING_ROTATION);
+
+    std::vector<int> nearest_juggler(nJugglers);
+    for (int i=0; i < nJugglers; ++i) {
+        const double nx = newFrame.jugglers[i].x;
+        const double ny = newFrame.jugglers[i].y;
+        int nearest_idx = -1;
+        double nearest_d2;
+        for (int j=0; j < nJugglers; ++j) {
+            const double dx = g_Frames.back().jugglers[i].x - nx;
+            const double dy = g_Frames.back().jugglers[i].y - ny;
+            if (nearest_idx == -1 || (dx*dx+dy*dy < nearest_d2) {
+                nearest_idx = j;
+                nearest_d2 = dx*dx+dy*dy;
+            }
+        }
+        assert(nearest_idx != -1);
+        nearest_juggler[i] = nearest_idx;
+    }
+
+    /* Okay, nearest_juggler[] is populated. Find each cycle in it.
+     * If it has no cycles, AND if JOINING_ROTATION is zero, then we're
+     * done and can simply splice the ends together. */
+
+    // TODO FIXME BUG HACK
+
 }
 
 void infer_facings()
@@ -312,10 +405,10 @@ void output()
         for (int ji=0; ji < nJugglers; ++ji) {
             const FrameJuggler &j = g_Frames[t%nBeats].jugglers[ji];
             if (j.is_passing) {
-                const FrameJuggler *who = g_Frames[t%nBeats].getJuggler(j.to_whom);
-                assert(who != NULL);
+                const int who = g_Frames[t%nBeats].getJugglerIdx(j.to_whom);
+                assert(who != -1);
                 printf("  { start: %d, end: %f, from: %d, to: %d, hand: '%c' },\n",
-                    COUNT*t, COUNT*t+1.3, ji, (int)(who - &g_Frames[t%nBeats].jugglers[0]),
+                    COUNT*t, COUNT*t+1.3, ji, who,
                     ((COUNT*t % 2) ? 'l' : 'r'));
             } else {
                 /* Explicitly insert a self. */
@@ -343,6 +436,7 @@ void do_help()
     puts("Usage: png2js [--options] frame1.png frame2.png [...] > pattern.js");
     puts("Converts a series of PNG frames into a Jugglers' Drift input file.");
     printf("  --count=%-4d Insert <count-1> selfs between each pair of PNG frames.\n", COUNT);
+    printf("  --join=%-5.1f Before splicing the ends of the pattern, rotate it <n> degrees.\n", JOINING_ROTATION);
     printf("  --bpm=%-6d Set beats-per-minute in the output file.\n", BPM);
     printf("  --fps=%-6d Set frames-per-second in the output file.\n", FPS);
     exit(0);
@@ -360,6 +454,8 @@ int main(int argc, char **argv)
             FPS = atoi(argv[i]+6);
         } else if (!strncmp(argv[i], "--count=", 8)) {
             COUNT = atoi(argv[i]+8);
+        } else if (!strncmp(argv[i], "--join=", 7)) {
+            JOINING_ROTATION = strtod(argv[i]+7, NULL);
         } else {
             do_help();
         }
