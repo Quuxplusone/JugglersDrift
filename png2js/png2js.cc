@@ -339,9 +339,9 @@ void do_help()
 {
     puts("Usage: png2js [--options] frame1.png frame2.png [...] > pattern.js");
     puts("Converts a series of PNG frames into a Jugglers' Drift input file.");
-    printf("  --count=%-4d Insert <count-1> selfs between each pair of PNG frames.", COUNT);
-    printf("  --bpm=%-6d Set beats-per-minute in the output file.", BPM);
-    printf("  --fps=%-6d Set frames-per-second in the output file.", FPS);
+    printf("  --count=%-4d Insert <count-1> selfs between each pair of PNG frames.\n", COUNT);
+    printf("  --bpm=%-6d Set beats-per-minute in the output file.\n", BPM);
+    printf("  --fps=%-6d Set frames-per-second in the output file.\n", FPS);
     exit(0);
 }
 
