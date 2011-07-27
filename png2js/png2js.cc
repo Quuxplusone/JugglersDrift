@@ -30,11 +30,11 @@ static double JOINING_ROTATION = 0.0;
 struct FrameJuggler {
     std::string name;
     double x, y;    /* position */
-    double fx, fy;  /* facing */
+    double facing;  /* in radians */
     bool is_passing;
     std::string to_whom;
     FrameJuggler(const std::string &s, int cx, int cy):
-        name(s), x(cx), y(cy), fx(0), fy(0), is_passing(false) { }
+        name(s), x(cx), y(cy), facing(0.0), is_passing(false) { }
 
     static bool by_name(const FrameJuggler &a, const FrameJuggler &b) {
         return a.name < b.name;
@@ -82,14 +82,8 @@ void Frame::spin_clockwise(double deg)
     const int nJugglers = jugglers.size();
     for (int ji = 0; ji < nJugglers; ++ji) {
         /* First fix the facing. */
-        double dfx = jugglers[ji].fx - jugglers[ji].x;
-        double dfy = jugglers[ji].fy - jugglers[ji].y;
-        assert(dfx != 0.0 || dfy != 0.0);
-        double angf = atan2(dfy, dfx);
         /* Subtract because we're spinning the pattern clockwise. */
-        double new_angf = angf - (deg * M_PI / 180);
-        jugglers[ji].fx = 100*cos(new_angf);  // TODO FIXME BUG HACK
-        jugglers[ji].fy = 100*sin(new_angf);
+        jugglers[ji].facing -= (deg * M_PI / 180);
 
         double dx = jugglers[ji].x - cx;
         double dy = jugglers[ji].y - cy;
@@ -99,9 +93,6 @@ void Frame::spin_clockwise(double deg)
         double new_ang = ang - (deg * M_PI / 180);
         jugglers[ji].x = cx + r*cos(new_ang);
         jugglers[ji].y = cy + r*sin(new_ang);
-
-        jugglers[ji].fx += jugglers[ji].x;  // TODO FIXME BUG HACK
-        jugglers[ji].fy += jugglers[ji].y;
     }
 }
 
@@ -294,11 +285,11 @@ void sort_and_sanity_check()
         const double nx = newFrame.jugglers[i].x;
         const double ny = newFrame.jugglers[i].y;
         int nearest_idx = -1;
-        double nearest_d2;
+        double nearest_d2 = 0.0;
         for (int j=0; j < nJugglers; ++j) {
             const double dx = g_Frames.back().jugglers[i].x - nx;
             const double dy = g_Frames.back().jugglers[i].y - ny;
-            if (nearest_idx == -1 || (dx*dx+dy*dy < nearest_d2) {
+            if (nearest_idx == -1 || (dx*dx+dy*dy < nearest_d2)) {
                 nearest_idx = j;
                 nearest_d2 = dx*dx+dy*dy;
             }
@@ -335,8 +326,9 @@ void infer_facings()
                 const FrameJuggler *target = g_Frames[t].getJuggler(who);
                 assert(target != NULL);
                 assert(target != &g_Frames[t].jugglers[ji]);
-                g_Frames[t].jugglers[ji].fx = target->x;
-                g_Frames[t].jugglers[ji].fy = target->y;
+                const double dx = target->x - g_Frames[t].jugglers[ji].x;
+                const double dy = target->y - g_Frames[t].jugglers[ji].y;
+                g_Frames[t].jugglers[ji].facing = atan2(dy, dx);
                 ever_passed = true;
             }
         }
@@ -353,16 +345,10 @@ void infer_facings()
                 /* Interpolate. */
                 const FrameJuggler &ja = g_Frames[(t-a + N) % N].jugglers[ji];
                 const FrameJuggler &jb = g_Frames[(t+b) % N].jugglers[ji];
-                const double ra = atan2(ja.fy - ja.y, ja.fx - ja.x);
-                const double rb = atan2(jb.fy - jb.y, jb.fx - jb.x);
-                /* Smoothly rotate between ra and rb. */
-                double rdiff = (rb - ra);
+                double rdiff = (jb.facing - ja.facing);
                 while (rdiff < 0) rdiff += 2*M_PI;
                 if (rdiff > M_PI) rdiff -= 2*M_PI;
-                const double r = a*rdiff / (a+b);
-                FrameJuggler &j = g_Frames[t].jugglers[ji];
-                j.fx = j.x + 100*cos(ra+r);
-                j.fy = j.y + 100*sin(ra+r);
+                g_Frames[t].jugglers[ji].facing = ja.facing + (a*rdiff / (a+b));
             }
         }
     }
@@ -390,13 +376,9 @@ void output()
         for (int t=0; t < nBeats+1; ++t)
           printf("%1.1f, ", g_Frames[t%nBeats].jugglers[ji].y);
         printf(" ],\n");
-        printf("      fx: [");
+        printf("      fa: [");
         for (int t=0; t < nBeats+1; ++t)
-          printf("%1.1f, ", g_Frames[t%nBeats].jugglers[ji].fx);
-        printf(" ],\n");
-        printf("      fy: [");
-        for (int t=0; t < nBeats+1; ++t)
-          printf("%1.1f, ", g_Frames[t%nBeats].jugglers[ji].fy);
+          printf("%1.1f, ", g_Frames[t%nBeats].jugglers[ji].facing);
         printf(" ] },\n");
     }
     printf("];\n");
