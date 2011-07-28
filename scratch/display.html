@@ -18,12 +18,11 @@ function circle(ctx, x, y, radius) {
   ctx.closePath(); ctx.stroke(); ctx.fill();
 }
 
-// Draw a juggler at (x,y) facing (fx,fy), with radius (r).
-function juggler(ctx, x, y, fx, fy, r) {
+// Draw a juggler at (x,y) facing (fa), with radius (r).
+function juggler(ctx, x, y, fa, r) {
   circle(ctx, x,y, r);
-  var angle = Math.atan2(fy-y, fx-x);
-  circle(ctx, x+r*Math.cos(angle-1.3), y+r*Math.sin(angle-1.3), r/2);
-  circle(ctx, x+r*Math.cos(angle+1.3), y+r*Math.sin(angle+1.3), r/2);
+  circle(ctx, x+r*Math.cos(fa-1.3), y+r*Math.sin(fa-1.3), r/2);
+  circle(ctx, x+r*Math.cos(fa+1.3), y+r*Math.sin(fa+1.3), r/2);
 }
 
 // Draw a thrown club at (x,y), sized to match a juggler of radius (r).
@@ -42,7 +41,7 @@ if (can.getContext) {
 var BPM = 100; // 100 juggling beats per minute
 var FPS = 10;  // 20 frames per second
 </script>
-<script type="text/javascript" src="e3.js"></script>
+<script type="text/javascript" src="pattern.js"></script>
 <script type="text/javascript">
 var BPF = BPM / (60*FPS);  // fraction of a beat to advance, per frame
 
@@ -72,15 +71,19 @@ for (var j in Jugglers) {
         // Interpolate between the two given facings.
         var ts_diff = this.ts[i+1] - this.ts[i];
         var p = (timestep - this.ts[i]) / ts_diff;
-        return [interpolate(p, this.fx[i], this.fx[i+1]), interpolate(p, this.fy[i], this.fy[i+1])];
+        var fa1 = this.fa[i];
+        var fa2 = this.fa[i+1];
+        var rdiff = fa2 - fa1;
+        while (rdiff < -Math.PI) rdiff += 2*Math.PI;
+        while (rdiff > Math.PI) rdiff -= 2*Math.PI;
+        return fa1 + interpolate(p, 0, rdiff);
       }
     }
     document.write('Jugglers['+j+'].facing_at('+timestep+') failed! ');
   };
   Jugglers[j].hand_at = function(rhand, timestep, r) {
     var [x,y] = this.pos_at(timestep);
-    var [fx,fy] = this.facing_at(timestep);
-    var angle = Math.atan2(fy-y, fx-x);
+    var angle = this.facing_at(timestep);
     angle += (rhand ? +1 : -1);
     return [x + 1.6*r*Math.cos(angle), y + 1.6*r*Math.sin(angle)];
   };
@@ -99,8 +102,8 @@ function animate() {
   for (var j in Jugglers) {
     var jug = Jugglers[j];
     var [x,y] = jug.pos_at(timestep);
-    var [fx,fy] = jug.facing_at(timestep);
-    juggler(ctx, x,y, fx,fy, JugglerSize);
+    var fa = jug.facing_at(timestep);
+    juggler(ctx, x,y, fa, JugglerSize);
   }
 
   for (var p in Passes) {
