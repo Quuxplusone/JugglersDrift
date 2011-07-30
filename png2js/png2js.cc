@@ -61,7 +61,7 @@ struct Frame {
     void center_of_mass(double &cx, double &cy) const;
     void spin_clockwise(double deg, double cx, double cy);
     void slide(double dx, double dy);
-    void rotate_jugglers(const std::vector<int> &p);
+    void permute_jugglers(const std::vector<int> &p);
 };
 
 void Frame::center_of_mass(double &cx_, double &cy_) const
@@ -75,19 +75,6 @@ void Frame::center_of_mass(double &cx_, double &cy_) const
     }
     cx /= nJugglers;
     cy /= nJugglers;
-    cx_ = cx; cy_ = cy;
-}
-
-void center_of_mass(const std::vector<Frame> &v, double &cx_, double &cy_)
-{
-    int n = v.size();
-    double cx = 0, cy = 0;
-    for (int i=0; i < n; ++i) {
-        double dx, dy;
-        v[i].center_of_mass(dx, dy);
-        cx += dx; cy += dy;
-    }
-    cx /= n; cy /= n;
     cx_ = cx; cy_ = cy;
 }
 
@@ -128,7 +115,7 @@ void Frame::slide(double dx, double dy)
  * (Bob at (0,5))
  * (Carol at (10,0) passing to Alice)
  */
-void Frame::rotate_jugglers(const std::vector<int> &p)
+void Frame::permute_jugglers(const std::vector<int> &p)
 {
     const int nJugglers = jugglers.size();
     assert((int)p.size() == nJugglers);
@@ -390,12 +377,6 @@ std::vector<int> deduce_permutation(const std::vector<Frame> &v)
     return perm;
 }
 
-void cross(const double a[3], const double b[3], double result[3])
-{
-    result[0] = a[1]*b[2] - a[2]*b[1];
-    result[1] = a[2]*b[0] - a[0]*b[2];
-    result[2] = a[0]*b[1] - a[1]*b[0];
-}
 
 void intersectLines(const double p1[2], const double v1[2],
                     const double p2[2], const double v2[2],
@@ -411,16 +392,13 @@ void deduce_center_of_rotation(const std::vector<Frame> &v,
                                const std::vector<int> &p,
                                double &cx, double &cy)
 {
-#if 0
-    double p1before[3] = { v[0].jugglers[0].x, v[0].jugglers[0].y, 0.0 };
-    double p2before[3] = { v[0].jugglers[1].x, v[0].jugglers[1].y, 0.0 };
-    double p1after[3] = { v.back().jugglers[p[0]].x, v.back().jugglers[p[0]].y, 0.0 };
-    double p2after[3] = { v.back().jugglers[p[1]].x, v.back().jugglers[p[1]].y, 0.0 };
+    double p1before[2] = { v[0].jugglers[p[0]].x, v[0].jugglers[p[0]].y };
+    double p2before[2] = { v[0].jugglers[p[1]].x, v[0].jugglers[p[1]].y };
+    double p1after[2] = { v.back().jugglers[0].x, v.back().jugglers[0].y };
+    double p2after[2] = { v.back().jugglers[1].x, v.back().jugglers[1].y };
 
-    double v1[3] = { p1after[0]-p1before[0], p1after[1]-p1before[1], 0.0 };
-    double v2[3] = { p2after[0]-p2before[0], p2after[1]-p2before[1], 0.0 };
-printf("v1=%f %f %f\n", v1[0], v1[1], v1[2]);
-printf("v2=%f %f %f\n", v2[0], v2[1], v2[2]);
+    double v1[2] = { p1after[0]-p1before[0], p1after[1]-p1before[1] };
+    double v2[2] = { p2after[0]-p2before[0], p2after[1]-p2before[1] };
 
     if (v1[0] == 0.0 && v1[1] == 0.0) {
         cx = p1before[0];
@@ -432,20 +410,16 @@ printf("v2=%f %f %f\n", v2[0], v2[1], v2[2]);
         return;
     }
 
-    double vn[3] = { 0.0, 0.0, 1.0 };
-    double vx1[3]; cross(v1, vn, vx1);
-    double vx2[3]; cross(v2, vn, vx2);
-printf("vx1=%f %f %f\n", vx1[0], vx1[1], vx1[2]);
-printf("vx2=%f %f %f\n", vx2[0], vx2[1], vx2[2]);
+    double vx1[2] = { -v1[1], v1[0] };
+    double vx2[2] = { -v2[1], v2[0] };
     double result[2];
+    p1after[0] = (p1before[0] + p1after[0]) / 2;
+    p1after[1] = (p1before[1] + p1after[1]) / 2;
+    p2after[0] = (p2before[0] + p2after[0]) / 2;
+    p2after[1] = (p2before[1] + p2after[1]) / 2;
     intersectLines(p1after, vx1, p2after, vx2, result);
     cx = result[0];
     cy = result[1];
-printf("cx=%.1f cy=%.1f\n", cx, cy);
-#else
-    (void)p;
-    v[0].center_of_mass(cx,cy);
-#endif
 }
 
 void splice_pattern()
@@ -521,7 +495,7 @@ printj(g_Frames);
         std::vector<Frame> v = originalFrames;
         for (int t=0; t < (int)originalFrames.size(); ++t) {
             v[t].spin_clockwise(i*JOINING_SPIN, cx, cy);
-            v[t].rotate_jugglers(currentPerm);
+            v[t].permute_jugglers(currentPerm);
         }
         g_Frames.insert(g_Frames.end(), v.begin()+1, v.end());
         std::vector<int> newPerm(nJugglers);
