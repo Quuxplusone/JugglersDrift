@@ -25,7 +25,8 @@ static void do_error(const char *fmt, ...)
 static int BPM = 100;
 static int FPS = 20;
 static int COUNT = 2;
-static double JOINING_ROTATION = 0.0;
+static double JOINING_SPIN = 0.0;
+static bool DO_SPLICE = false;
 
 struct FrameJuggler {
     std::string name;
@@ -58,7 +59,9 @@ struct Frame {
         return -1;
     }
     void center_of_mass(double &cx, double &cy) const;
-    void spin_clockwise(double deg);
+    void spin_clockwise(double deg, double cx, double cy);
+    void slide(double dx, double dy);
+    void rotate_jugglers(const std::vector<int> &p);
 };
 
 void Frame::center_of_mass(double &cx_, double &cy_) const
@@ -75,10 +78,21 @@ void Frame::center_of_mass(double &cx_, double &cy_) const
     cx_ = cx; cy_ = cy;
 }
 
-void Frame::spin_clockwise(double deg)
+void center_of_mass(const std::vector<Frame> &v, double &cx_, double &cy_)
 {
-    double cx, cy;
-    center_of_mass(cx, cy);
+    int n = v.size();
+    double cx = 0, cy = 0;
+    for (int i=0; i < n; ++i) {
+        double dx, dy;
+        v[i].center_of_mass(dx, dy);
+        cx += dx; cy += dy;
+    }
+    cx /= n; cy /= n;
+    cx_ = cx; cy_ = cy;
+}
+
+void Frame::spin_clockwise(double deg, double cx, double cy)
+{
     const int nJugglers = jugglers.size();
     for (int ji = 0; ji < nJugglers; ++ji) {
         /* First fix the facing. */
@@ -96,8 +110,69 @@ void Frame::spin_clockwise(double deg)
     }
 }
 
+void Frame::slide(double dx, double dy)
+{
+    const int nJugglers = jugglers.size();
+    for (int ji = 0; ji < nJugglers; ++ji) {
+        jugglers[ji].x += dx;
+        jugglers[ji].y += dy;
+    }
+}
+
+/* Suppose "p" is {0 2 1} and this frame currently looks like
+ * (Alice at (0,0) passing to Bob)
+ * (Bob at (10,0) passing to Alice)
+ * (Carol at (0,5))
+ * Then after this function executes, this frame will look like
+ * (Alice at (0,0) passing to Carol)
+ * (Bob at (0,5))
+ * (Carol at (10,0) passing to Alice)
+ */
+void Frame::rotate_jugglers(const std::vector<int> &p)
+{
+    const int nJugglers = jugglers.size();
+    assert((int)p.size() == nJugglers);
+
+    std::vector<int> pprime(p.size());
+    for (int i=0; i < nJugglers; ++i)
+      pprime[p[i]] = i;
+
+    Frame newFrame = *this;
+    for (int ji=0; ji < nJugglers; ++ji) {
+        /* Get the new position, facing, etc. */
+        newFrame.jugglers[ji] = this->jugglers[p[ji]];
+        /* ...but keep the old name */
+        newFrame.jugglers[ji].name = this->jugglers[ji].name;
+        /* Update the name of the person being passed to */
+        if (newFrame.jugglers[ji].is_passing) {
+            int oi = getJugglerIdx(this->jugglers[p[ji]].to_whom);
+            newFrame.jugglers[ji].to_whom = this->jugglers[pprime[oi]].name;
+        }
+    }
+    *this = newFrame;
+}
 
 std::vector<Frame> g_Frames;
+
+void printj(const std::vector<Frame> &v)
+{
+    for (int i=0; i < (int)v.size(); ++i) {
+        printf("(Frame %d.)", i);
+        const int nJugglers = v[i].jugglers.size();
+        for (int j=0; j < nJugglers; ++j) {
+            const FrameJuggler &fj = v[i].jugglers[j];
+            printf(fj.is_passing ? "  %s (p=%s)" : "  %s", fj.name.c_str(), fj.to_whom.c_str());
+        }
+        printf("\n");
+    }
+}
+
+static double mod_360(double x)
+{
+    while (x < 0.0) x += 360.0;
+    while (x >= 360.0) x -= 360.0;
+    return x;
+}
 
 void process_frame(int t, const char *fname)
 {
@@ -131,7 +206,7 @@ void process_frame(int t, const char *fname)
              * shape is roughly circular, i.e. that its population is roughly
              * pi-r-squared. TODO FIXME BUG HACK */
             char jname[10];
-            sprintf(jname, "<#%02X%02X%02X>", sh.color[0], sh.color[1], sh.color[2]);
+            sprintf(jname, "#%02X%02X%02X", sh.color[0], sh.color[1], sh.color[2]);
             this_frame.jugglers.push_back(FrameJuggler(jname, sh.cx, sh.cy));
             avg_juggler_radius += sh.radius;
             sh.handled = true;
@@ -265,6 +340,117 @@ void sort_and_sanity_check()
                 g_Frames[0].filename.c_str(), f.filename.c_str());
         }
     }
+}
+
+
+std::vector<int> deduce_permutation(const std::vector<Frame> &v)
+{
+    /* Spin [0] around its center of mass. Then translate it until
+     * its center of mass matches up with the center of mass of [n-1].
+     * Then the individual jugglers' positions ought to match up pretty
+     * close to exactly, so we can then deduce the permutation in
+     * "nearest_jugglers[]" below. */
+    Frame nthFrame = v[0];
+    double cx, cy;
+    nthFrame.center_of_mass(cx, cy);
+    nthFrame.spin_clockwise(JOINING_SPIN, cx, cy);
+    double new_cx, new_cy;
+    v.back().center_of_mass(new_cx, new_cy);
+    nthFrame.slide(new_cx - cx, new_cy - cy);
+
+    const int nJugglers = v[0].jugglers.size();
+    std::vector<int> perm(nJugglers);
+    for (int i=0; i < nJugglers; ++i) {
+        const double ox = g_Frames.back().jugglers[i].x;
+        const double oy = g_Frames.back().jugglers[i].y;
+        int nearest_idx = -1;
+        double nearest_d2 = 0.0;
+        for (int j=0; j < nJugglers; ++j) {
+            const double dx = nthFrame.jugglers[j].x - ox;
+            const double dy = nthFrame.jugglers[j].y - oy;
+            if (nearest_idx == -1 || (dx*dx+dy*dy < nearest_d2)) {
+                nearest_idx = j;
+                nearest_d2 = dx*dx+dy*dy;
+            }
+        }
+        assert(nearest_idx != -1);
+        perm[i] = nearest_idx;
+    }
+
+    for (int i=0; i < nJugglers; ++i) {
+        for (int j=i+1; j < nJugglers; ++j) {
+            if (perm[i] == perm[j]) {
+                do_error("It's ambiguous which of %s and %s should map to %s's original position.",
+                    v[0].jugglers[i].name.c_str(), v[0].jugglers[j].name.c_str(),
+                    nthFrame.jugglers[perm[i]].name.c_str());
+            }
+        }
+    }
+
+    return perm;
+}
+
+void cross(const double a[3], const double b[3], double result[3])
+{
+    result[0] = a[1]*b[2] - a[2]*b[1];
+    result[1] = a[2]*b[0] - a[0]*b[2];
+    result[2] = a[0]*b[1] - a[1]*b[0];
+}
+
+void intersectLines(const double p1[2], const double v1[2],
+                    const double p2[2], const double v2[2],
+                    double result[2])
+{
+    double u = v2[0]*(p1[1]-p2[1]) - v2[1]*(p1[0]-p2[0]);
+    u /= (v2[1]*v1[0] - v2[0]*v1[1]);
+    result[0] = p1[0] + u*v1[0];
+    result[1] = p1[1] + u*v1[1];
+}
+
+void deduce_center_of_rotation(const std::vector<Frame> &v,
+                               const std::vector<int> &p,
+                               double &cx, double &cy)
+{
+#if 0
+    double p1before[3] = { v[0].jugglers[0].x, v[0].jugglers[0].y, 0.0 };
+    double p2before[3] = { v[0].jugglers[1].x, v[0].jugglers[1].y, 0.0 };
+    double p1after[3] = { v.back().jugglers[p[0]].x, v.back().jugglers[p[0]].y, 0.0 };
+    double p2after[3] = { v.back().jugglers[p[1]].x, v.back().jugglers[p[1]].y, 0.0 };
+
+    double v1[3] = { p1after[0]-p1before[0], p1after[1]-p1before[1], 0.0 };
+    double v2[3] = { p2after[0]-p2before[0], p2after[1]-p2before[1], 0.0 };
+printf("v1=%f %f %f\n", v1[0], v1[1], v1[2]);
+printf("v2=%f %f %f\n", v2[0], v2[1], v2[2]);
+
+    if (v1[0] == 0.0 && v1[1] == 0.0) {
+        cx = p1before[0];
+        cy = p1before[1];
+        return;
+    } else if (v2[0] == 0.0 && v2[1] == 0.0) {
+        cx = p2before[0];
+        cy = p2before[1];
+        return;
+    }
+
+    double vn[3] = { 0.0, 0.0, 1.0 };
+    double vx1[3]; cross(v1, vn, vx1);
+    double vx2[3]; cross(v2, vn, vx2);
+printf("vx1=%f %f %f\n", vx1[0], vx1[1], vx1[2]);
+printf("vx2=%f %f %f\n", vx2[0], vx2[1], vx2[2]);
+    double result[2];
+    intersectLines(p1after, vx1, p2after, vx2, result);
+    cx = result[0];
+    cy = result[1];
+printf("cx=%.1f cy=%.1f\n", cx, cy);
+#else
+    (void)p;
+    v[0].center_of_mass(cx,cy);
+#endif
+}
+
+void splice_pattern()
+{
+    const int nJugglers = g_Frames[0].jugglers.size();
 
     /* The user might have provided us with only half of the pattern, or
      * even only 1/nJugglers'th of the pattern. For each juggler in the
@@ -274,35 +460,101 @@ void sort_and_sanity_check()
      * rotate each of those cycles and splice the rotated pattern onto
      * the end of this one. */
 
-    /* Take the first frame and spin the pattern by JOINING_ROTATION;
-     * this covers the case where the user has given us only the first
-     * 1/4 of Havana, for example. */
-    Frame newFrame = g_Frames[0];
-    newFrame.spin_clockwise(JOINING_ROTATION);
+    std::vector<int> nearest_juggler = deduce_permutation(g_Frames);
+    assert((int)nearest_juggler.size() == nJugglers);
 
-    std::vector<int> nearest_juggler(nJugglers);
-    for (int i=0; i < nJugglers; ++i) {
-        const double nx = newFrame.jugglers[i].x;
-        const double ny = newFrame.jugglers[i].y;
-        int nearest_idx = -1;
-        double nearest_d2 = 0.0;
-        for (int j=0; j < nJugglers; ++j) {
-            const double dx = g_Frames.back().jugglers[i].x - nx;
-            const double dy = g_Frames.back().jugglers[i].y - ny;
-            if (nearest_idx == -1 || (dx*dx+dy*dy < nearest_d2)) {
-                nearest_idx = j;
-                nearest_d2 = dx*dx+dy*dy;
-            }
+    /* Okay, now figure out how many times we're going to have to repeat the
+     * original sequence in order that all of the cycles in nearest_juggler[]
+     * cycle back to the beginning. */
+    std::vector<int> oj(nJugglers), nj(nJugglers);
+    for (int i=0; i < nJugglers; ++i)
+      oj[i] = i;
+    int total_rotations = 0;
+    while (true) {
+        ++total_rotations;
+        bool back_to_start = true;
+        for (int i=0; i < nJugglers; ++i) {
+            nj[i] = oj[nearest_juggler[i]];
+            if (nj[i] != i)
+              back_to_start = false;
         }
-        assert(nearest_idx != -1);
-        nearest_juggler[i] = nearest_idx;
+        if (back_to_start) break;
+        oj = nj;
     }
 
-    /* Okay, nearest_juggler[] is populated. Find each cycle in it.
-     * If it has no cycles, AND if JOINING_ROTATION is zero, then we're
-     * done and can simply splice the ends together. */
+    /* We'll need to splice the sequence at least "total_rotations" times,
+     * just in order to get the jugglers back to their original roles.
+     * It's possible that after "total_rotations" splices, the entire pattern
+     * will still be spun relative to its original physical position, so
+     * we might need to take *that* and splice it. We'll arbitrarily say that
+     * we're only going to spin-and-splice it up to 6 times. */
+    int total_spins = -1;
+    double final_spin = mod_360(total_rotations * JOINING_SPIN);
+    for (int i=1; i <= 6; ++i) {
+        for (int j=0; j < i; ++j) {
+            double expected = mod_360(j*(360.0/i));
+            if (fabs(final_spin - expected) < 2.0) {
+                total_spins = i;
+                goto done;
+            }
+        }
+    }
+  done:
+    if (total_spins <= 0)
+      do_error("We can only handle up to 5 spin-splices; maybe try a different --join= argument?");
 
-    // TODO FIXME BUG HACK
+#if 0
+printf("total_rotations=%d\n", total_rotations);
+printf("total_spins=%d\n", total_spins);
+printf("Original sequence:\n");
+printj(g_Frames);
+#endif
+
+    double cx, cy;
+    deduce_center_of_rotation(g_Frames, nearest_juggler, cx, cy);
+
+    /* Rotate-and-splice the pattern "total_rotations" times. */
+  {
+    std::vector<int> currentPerm = nearest_juggler;
+    std::vector<Frame> originalFrames = g_Frames;
+    for (int i=1; i < total_rotations; ++i) {
+        std::vector<Frame> v = originalFrames;
+        for (int t=0; t < (int)originalFrames.size(); ++t) {
+            v[t].spin_clockwise(i*JOINING_SPIN, cx, cy);
+            v[t].rotate_jugglers(currentPerm);
+        }
+        g_Frames.insert(g_Frames.end(), v.begin()+1, v.end());
+        std::vector<int> newPerm(nJugglers);
+        for (int j=0; j < nJugglers; ++j)
+          newPerm[j] = nearest_juggler[currentPerm[j]];
+        currentPerm = newPerm;
+    }
+  }
+
+#if 0
+printf("Rotated-and-spliced sequence:\n");
+printj(g_Frames);
+#endif
+
+    /* Now spin-and-splice the pattern "total_spins" times. */
+  {
+    std::vector<Frame> originalFrames = g_Frames;
+    for (int i=1; i < total_spins; ++i) {
+        std::vector<Frame> v = originalFrames;
+        for (int t=0; t < (int)originalFrames.size(); ++t)
+          v[t].spin_clockwise(i*total_rotations*JOINING_SPIN, cx, cy);
+        g_Frames.insert(g_Frames.end(), v.begin()+1, v.end());
+    }
+  }
+
+  /* And remove the last frame, so that the final transition from
+   * [n-1] back to [0] works smoothly. */
+  g_Frames.resize(g_Frames.size()-1);
+
+#if 0
+printf("Spun-and-spliced sequence:\n");
+printj(g_Frames);
+#endif
 
 }
 
@@ -418,7 +670,7 @@ void do_help()
     puts("Usage: png2js [--options] frame1.png frame2.png [...] > pattern.js");
     puts("Converts a series of PNG frames into a Jugglers' Drift input file.");
     printf("  --count=%-4d Insert <count-1> selfs between each pair of PNG frames.\n", COUNT);
-    printf("  --join=%-5.1f Before splicing the ends of the pattern, rotate it <n> degrees.\n", JOINING_ROTATION);
+    printf("  --join=%-5.1f Before splicing the ends of the pattern, rotate it <n> degrees.\n", JOINING_SPIN);
     printf("  --bpm=%-6d Set beats-per-minute in the output file.\n", BPM);
     printf("  --fps=%-6d Set frames-per-second in the output file.\n", FPS);
     exit(0);
@@ -437,7 +689,8 @@ int main(int argc, char **argv)
         } else if (!strncmp(argv[i], "--count=", 8)) {
             COUNT = atoi(argv[i]+8);
         } else if (!strncmp(argv[i], "--join=", 7)) {
-            JOINING_ROTATION = strtod(argv[i]+7, NULL);
+            JOINING_SPIN = mod_360(strtod(argv[i]+7, NULL));
+            DO_SPLICE = true;
         } else {
             do_help();
         }
@@ -451,6 +704,8 @@ int main(int argc, char **argv)
         process_frame(t, argv[i+t]);
     }
     sort_and_sanity_check();
+    if (DO_SPLICE)
+      splice_pattern();
     infer_facings();
     output();
     return 0;
