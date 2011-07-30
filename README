@@ -72,7 +72,7 @@ a fraction of the frames. If the first frame is equivalent to the last
 frame rotated clockwise by N degrees (modulo some permutation of the
 jugglers' roles), then "--join=N" will generate the full animation.
 
-    ./png2js --join=120 ../png-patterns/Havana/Havana0[123456].png >pattern.js
-    ./png2js --join=120 ../png-patterns/5pHavana/5pHavana10[123456].png >pattern.js
-    ./png2js --join=0 ../png-patterns/5pHavana/5pHavana1* ../png-patterns/5pHavana/5pHavana201.png >pattern.js
+    ./png2js --join=120 ../png-patterns/Havana/0[123456].png >pattern.js
+    ./png2js --join=120 ../png-patterns/5pHavana/10[123456].png >pattern.js
+    ./png2js --join=0 ../png-patterns/5pHavana/1* ../png-patterns/5pHavana/201.png >pattern.js
 
