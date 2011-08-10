@@ -6,7 +6,7 @@
 #include <vector>
 #include "findshapes.h"
 
-Shape::Shape(const unsigned char c[3]): handled(false)
+Shape::Shape(const unsigned char c[3])
 {
     memcpy(color, c, 3);
 }
@@ -63,8 +63,64 @@ int UnionFind::findparent(int a)
     return a;
 }
 
-#include <stdio.h>
-std::vector<Shape> find_shapes_in_image(unsigned char (*im)[3], int w, int h)
+Shape *copy_and_classify(const Shape &sh)
+{
+    /* Compute center of mass. */
+    double cx = 0, cy = 0;
+    for (int i=0; i < (int)sh.pixels.size(); ++i) {
+        cx += sh.pixels[i].x;
+        cy += sh.pixels[i].y;
+    }
+    cx = (cx + 0.5) / sh.pixels.size();
+    cy = (cy + 0.5) / sh.pixels.size();
+    double maxd2 = 0.0;
+    for (int i=0; i < (int)sh.pixels.size(); ++i) {
+        double dx = (cx - sh.pixels[i].x);
+        double dy = (cy - sh.pixels[i].y);
+        double d2 = dx*dx + dy*dy;
+        if (d2 > maxd2)
+          maxd2 = d2;
+    }
+    const double radius = sqrt(maxd2);
+    const double diameter = 2*radius;
+    const double area = sh.pixels.size();
+
+    if (area > 3*radius*radius) {
+        return new Circle(sh, cx, cy, radius);
+    }
+
+    if (area < 6*diameter) {
+        /* Since the shape is connected, area must be at least proportional
+         * to radius; but if it's consistent with a 6*D rectangle, then
+         * we're probably dealing with a line segment. */
+        double ang = 0, ang2 = 0;
+        int count = 0;
+        for (int i=0; i < (int)sh.pixels.size(); ++i) {
+            double dy = sh.pixels[i].y - cy;
+            double dx = sh.pixels[i].x - cx;
+            if (dx*dx + dy*dy <= radius*radius / 2.0) continue;
+            double a = atan2(dy, dx);
+            a += 1.0;  // TODO FIXME BUG HACK
+            double a2 = a+1.0;
+            while (a < 0) a += M_PI;
+            while (a > M_PI) a -= M_PI;
+            while (a2 < 0) a2 += M_PI;
+            while (a2 > M_PI) a2 -= M_PI;
+            ang += a;
+            ang2 += a2;
+            count += 1;
+        }
+        ang /= count; ang -= 1.0;
+        ang2 /= count; ang2 -= 2.0;
+        if (fabs(ang - M_PI/2) < 0.1) { ang = ang2; }
+        return new LineSegment(sh, cx, cy, ang);
+    }
+
+    return new UnknownShape(sh, cx, cy);
+}
+
+
+std::vector<Shape*> find_shapes_in_image(unsigned char (*im)[3], int w, int h)
 {
     UnionFind uf(w*h);
     for (int j=0; j < h-1; ++j) {
@@ -92,31 +148,11 @@ std::vector<Shape> find_shapes_in_image(unsigned char (*im)[3], int w, int h)
         }
     }
     /* Convert the map to a simple vector of Shapes. */
-    std::vector<Shape> rv;
+    std::vector<Shape*> rv;
     for (std::map<int,Shape>::const_iterator it = shapes.begin(); it != shapes.end(); ++it)
-      rv.push_back(it->second);
+      rv.push_back(copy_and_classify(it->second));
     /* From here on, use "rv" instead of "shapes". */
     shapes.clear();
-    /* Compute center of mass for each shape. */
-    for (int r=0; r < (int)rv.size(); ++r) {
-        Shape &sh = rv[r];
-        double cx = 0, cy = 0;
-        for (int i=0; i < (int)sh.pixels.size(); ++i) {
-            cx += sh.pixels[i].x;
-            cy += sh.pixels[i].y;
-        }
-        sh.cx = (cx + 0.5) / sh.pixels.size();
-        sh.cy = (cy + 0.5) / sh.pixels.size();
-        double maxd2 = 0.0;
-        for (int i=0; i < (int)sh.pixels.size(); ++i) {
-            double dx = (sh.cx - sh.pixels[i].x);
-            double dy = (sh.cy - sh.pixels[i].y);
-            double d2 = dx*dx + dy*dy;
-            if (d2 > maxd2)
-              maxd2 = d2;
-        }
-        sh.radius = sqrt(maxd2);
-    }
     return rv;
 }    
 

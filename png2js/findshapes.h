@@ -4,6 +4,12 @@
 
 #include <vector>
 
+enum ShapeKind {
+    SK_UNKNOWN,
+    SK_CIRCLE,
+    SK_LINE_SEGMENT
+};
+
 struct ShapePixel {
     int x, y;
     ShapePixel(int i, int j): x(i), y(j) { }
@@ -12,9 +18,11 @@ struct ShapePixel {
 struct Shape {
     std::vector<ShapePixel> pixels;
     unsigned char color[3];
-    int cx, cy;  /* center coordinates */
-    int radius;
-    bool handled;
+    double cx, cy;  /* center coordinates */
+
+    virtual ShapeKind kind() { return SK_UNKNOWN; }
+    bool is_black() const { return !(color[0] || color[1] || color[2]); }
+
     Shape() { }
     Shape(const unsigned char[3]);
     void push_back(int i, int j) {
@@ -22,6 +30,22 @@ struct Shape {
     }
 };
 
-std::vector<Shape> find_shapes_in_image(unsigned char (*im)[3], int w, int h);
+struct UnknownShape : public Shape {
+    UnknownShape(const Shape &sh, int x, int y): Shape(sh) { cx = x; cy = y; }
+};
+
+struct Circle : public Shape {
+    virtual ShapeKind kind() { return SK_CIRCLE; }
+    double radius;
+    Circle(const Shape &sh, int x, int y, int r): Shape(sh), radius(r) { cx = x; cy = y; }
+};
+
+struct LineSegment : public Shape {
+    virtual ShapeKind kind() { return SK_LINE_SEGMENT; }
+    double angle;
+    LineSegment(const Shape &sh, int x, int y, double a): Shape(sh), angle(a) { cx = x; cy = y; }
+};
+
+std::vector<Shape*> find_shapes_in_image(unsigned char (*im)[3], int w, int h);
 
 #endif /* H_FINDSHAPES */

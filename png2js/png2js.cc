@@ -181,22 +181,25 @@ void process_frame(int t, const char *fname)
     Frame &this_frame = g_Frames.back();
     /* Find connected regions of the same color.
      * This routine automatically ignores light-gray tracery. */
-    std::vector<Shape> all_shapes = find_shapes_in_image(im, w, h);
+    std::vector<Shape*> all_shapes = find_shapes_in_image(im, w, h);
     free(im);
     /* Classify each remaining shape as a juggler or a pass. */
     double avg_juggler_radius = 0.0;
     for (int i=0; i < (int)all_shapes.size(); ++i) {
-        Shape &sh = all_shapes[i];
-        if (sh.color[0] || sh.color[1] || sh.color[2]) {
-            /* Is this shape non-black? If so, its center of mass is the position
-             * of a juggler named <#color>. For sanity's sake, check that the
-             * shape is roughly circular, i.e. that its population is roughly
-             * pi-r-squared. TODO FIXME BUG HACK */
-            char jname[10];
-            sprintf(jname, "#%02X%02X%02X", sh.color[0], sh.color[1], sh.color[2]);
-            this_frame.jugglers.push_back(FrameJuggler(jname, sh.cx, sh.cy));
-            avg_juggler_radius += sh.radius;
-            sh.handled = true;
+        Shape *sh = all_shapes[i];
+        Circle *ci = dynamic_cast<Circle*>(sh);
+        assert((sh->kind() == SK_CIRCLE) == (ci != NULL));
+        if (ci != NULL) {
+            if (ci->is_black()) {
+                do_error("Frame \"%s\" contains a black circle!", fname);
+            } else {
+                /* Its center of mass is the position
+                 * of a juggler named #color. */
+                char jname[10];
+                sprintf(jname, "#%02X%02X%02X", ci->color[0], ci->color[1], ci->color[2]);
+                this_frame.jugglers.push_back(FrameJuggler(jname, ci->cx, ci->cy));
+                avg_juggler_radius += ci->radius;
+            }
         }
     }
     if (this_frame.jugglers.empty())
@@ -204,99 +207,85 @@ void process_frame(int t, const char *fname)
     avg_juggler_radius /= this_frame.jugglers.size();
     this_frame.juggler_radius = avg_juggler_radius;
     for (int si=0; si < (int)all_shapes.size(); ++si) {
-        Shape &sh = all_shapes[si];
-        if (!sh.color[0] && !sh.color[1] && !sh.color[2]) {
-            /* Is this shape black? If so, it ought to be a line segment roughly
-             * joining two jugglers. */
-            double ang = 0, ang2 = 0;
-            int count = 0;
-            for (int i=0; i < (int)sh.pixels.size(); ++i) {
-                double dy = sh.pixels[i].y - sh.cy;
-                double dx = sh.pixels[i].x - sh.cx;
-                if (dx*dx + dy*dy <= sh.radius*sh.radius / 2.0) continue;
-                double a = atan2(dy, dx);
-                a += 1.0;  // TODO FIXME BUG HACK
-                double a2 = a+1.0;
-                while (a < 0) a += M_PI;
-                while (a > M_PI) a -= M_PI;
-                while (a2 < 0) a2 += M_PI;
-                while (a2 > M_PI) a2 -= M_PI;
-                ang += a;
-                ang2 += a2;
-                count += 1;
-            }
-            ang /= count; ang -= 1.0;
-            ang2 /= count; ang2 -= 2.0;
-            if (fabs(ang - M_PI/2) < 0.1) { fputs("Using ang2.\n", stderr); ang = ang2; }
-#if 0
-fprintf(stderr, "%s: black line at (%d,%d), ang=%.1f (ang2=%.1f)\n", fname,
-    sh.cx, sh.cy, ang*180/M_PI, ang2*180/M_PI);
-#endif
-            /* Now "ang" should be the angle of the line segment. See which
-             * juggler is nearest along each of the rays heading outward from
-             * (cx,cy) in the directions given by "ang" and "ang+pi". */
-            FrameJuggler *closest_pos_juggler = NULL;
-            double min_pos_u = 0.0;
-            FrameJuggler *closest_neg_juggler = NULL;
-            double min_neg_u = 0.0;
-            const double x1 = sh.cx, y1 = sh.cy;
-            const double x2 = sh.cx + 100*cos(ang), y2 = sh.cy + 100*sin(ang);
-            const double d12sq = (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1);
-            for (int i=0; i < (int)this_frame.jugglers.size(); ++i) {
-                FrameJuggler &jug = this_frame.jugglers[i];
-                const double x3 = jug.x, y3 = jug.y;
-                const double u = ((x3 - x1)*(x2 - x1) + (y3 - y1)*(y2 - y1)) / d12sq;
-                const double xi = x1 + u*(x2-x1);
-                const double yi = y1 + u*(y2-y1);
-                /* (xi, yi) is the point along "ang" closest to "jug". */
-                const double dj2 = (xi-x3)*(xi-x3) + (yi-y3)*(yi-y3);
-                if (dj2 < avg_juggler_radius*avg_juggler_radius) {
-                    /* The line passes through this juggler. */
-                    if (u > 0 && (closest_pos_juggler == NULL || u < min_pos_u)) {
-                        min_pos_u = u;
-                        closest_pos_juggler = &jug;
-                    } else if (u < 0 && (closest_neg_juggler == NULL || u > min_neg_u)) {
-                        min_neg_u = u;
-                        closest_neg_juggler = &jug;
-                    }
+        Shape *sh = all_shapes[si];
+        LineSegment *seg = dynamic_cast<LineSegment*>(sh);
+        assert((sh->kind() == SK_LINE_SEGMENT) == (seg != NULL));
+        if (seg != NULL) {
+            if (!seg->is_black()) {
+                do_error("Frame \"%s\" contains a non-black line segment!", fname);
+            } else {
+                const double ang = seg->angle;
+                /* It ought to roughly join two jugglers. See which juggler
+                 * is nearest along each of the rays heading outward from
+                 * (cx,cy) in the directions given by "ang" and "ang+pi". */
+                FrameJuggler *closest_pos_juggler = NULL;
+                double min_pos_u = 0.0;
+                FrameJuggler *closest_neg_juggler = NULL;
+                double min_neg_u = 0.0;
+                const double x1 = seg->cx, y1 = seg->cy;
+                const double x2 = seg->cx + 100*cos(ang), y2 = seg->cy + 100*sin(ang);
+                const double d12sq = (x2-x1)*(x2-x1) + (y2-y1)*(y2-y1);
+                for (int i=0; i < (int)this_frame.jugglers.size(); ++i) {
+                    FrameJuggler &jug = this_frame.jugglers[i];
+                    const double x3 = jug.x, y3 = jug.y;
+                    const double u = ((x3 - x1)*(x2 - x1) + (y3 - y1)*(y2 - y1)) / d12sq;
+                    const double xi = x1 + u*(x2-x1);
+                    const double yi = y1 + u*(y2-y1);
+                    /* (xi, yi) is the point along "ang" closest to "jug". */
+                    const double dj2 = (xi-x3)*(xi-x3) + (yi-y3)*(yi-y3);
+                    if (dj2 < avg_juggler_radius*avg_juggler_radius) {
+                        /* The line passes through this juggler. */
+                        if (u > 0 && (closest_pos_juggler == NULL || u < min_pos_u)) {
+                            min_pos_u = u;
+                            closest_pos_juggler = &jug;
+                        } else if (u < 0 && (closest_neg_juggler == NULL || u > min_neg_u)) {
+                            min_neg_u = u;
+                            closest_neg_juggler = &jug;
+                        }
+                   }
+                }
+                if (closest_pos_juggler == NULL && closest_neg_juggler == NULL) {
+                    do_error("One of the black lines in \"%s\" doesn't connect any jugglers!",
+                        fname);
+                } else if (closest_pos_juggler == NULL) {
+                    do_error("One of the black lines in \"%s\" connects juggler %s to empty space!",
+                        fname, closest_neg_juggler->name.c_str());
+                } else if (closest_neg_juggler == NULL) {
+                    do_error("One of the black lines in \"%s\" connects juggler %s to empty space!",
+                        fname, closest_pos_juggler->name.c_str());
+                } else if (closest_pos_juggler->is_passing) {
+                    do_error("In \"%s\", juggler %s is passing to %s and %s simultaneously!",
+                        fname, closest_pos_juggler->name.c_str(),
+                        closest_pos_juggler->to_whom.c_str(), closest_neg_juggler->name.c_str());
+                } else if (closest_neg_juggler->is_passing) {
+                    do_error("In \"%s\", juggler %s is passing to %s and %s simultaneously!",
+                        fname, closest_neg_juggler->name.c_str(),
+                        closest_neg_juggler->to_whom.c_str(), closest_pos_juggler->name.c_str());
+                } else {
+                    closest_pos_juggler->is_passing = true;
+                    closest_pos_juggler->to_whom = closest_neg_juggler->name;
+                    closest_neg_juggler->is_passing = true;
+                    closest_neg_juggler->to_whom = closest_pos_juggler->name;
                 }
             }
-            if (closest_pos_juggler == NULL && closest_neg_juggler == NULL) {
-                do_error("One of the black lines in \"%s\" doesn't connect any jugglers!", fname);
-            } else if (closest_pos_juggler == NULL) {
-                do_error("One of the black lines in \"%s\" connects juggler %s to empty space!",
-                    fname, closest_neg_juggler->name.c_str());
-            } else if (closest_neg_juggler == NULL) {
-                do_error("One of the black lines in \"%s\" connects juggler %s to empty space!",
-                    fname, closest_pos_juggler->name.c_str());
-            } else if (closest_pos_juggler->is_passing) {
-                do_error("In \"%s\", juggler %s is passing to %s and %s simultaneously!",
-                    fname, closest_pos_juggler->name.c_str(),
-                    closest_pos_juggler->to_whom.c_str(), closest_neg_juggler->name.c_str());
-            } else if (closest_neg_juggler->is_passing) {
-                do_error("In \"%s\", juggler %s is passing to %s and %s simultaneously!",
-                    fname, closest_neg_juggler->name.c_str(),
-                    closest_neg_juggler->to_whom.c_str(), closest_pos_juggler->name.c_str());
-            } else {
-                closest_pos_juggler->is_passing = true;
-                closest_pos_juggler->to_whom = closest_neg_juggler->name;
-                closest_neg_juggler->is_passing = true;
-                closest_neg_juggler->to_whom = closest_pos_juggler->name;
-            }
-            sh.handled = true;
         }
     }
     /* Lastly, if we didn't figure out what to do with every single shape in
      * this frame, then give an error. */
     int unhandled_count = 0;
     for (int si=0; si < (int)all_shapes.size(); ++si) {
-        Shape &sh = all_shapes[si];
-        if (!sh.handled) ++unhandled_count;
+        Shape *sh = all_shapes[si];
+        if (sh->kind() == SK_UNKNOWN) ++unhandled_count;
     }
     if (unhandled_count != 0) {
         do_error("Frame \"%s\" contains %d extraneous shape%s!", fname, unhandled_count,
             &"s"[unhandled_count!=1]);
     }
+
+    /* Since all_shapes[] contains pointers to new'ed objects,
+     * we must delete them now. */
+    for (int si=0; si < (int)all_shapes.size(); ++si)
+      delete all_shapes[si];
 }
 
 void sort_and_sanity_check()
@@ -378,14 +367,17 @@ std::vector<int> deduce_permutation(const std::vector<Frame> &v)
 }
 
 
-void intersectLines(const double p1[2], const double v1[2],
+bool intersectLines(const double p1[2], const double v1[2],
                     const double p2[2], const double v2[2],
                     double result[2])
 {
     double u = v2[0]*(p1[1]-p2[1]) - v2[1]*(p1[0]-p2[0]);
-    u /= (v2[1]*v1[0] - v2[0]*v1[1]);
+    double v = v2[1]*v1[0] - v2[0]*v1[1];
+    if (v == 0.0) return false;
+    u /= v;
     result[0] = p1[0] + u*v1[0];
     result[1] = p1[1] + u*v1[1];
+    return true;
 }
 
 void deduce_center_of_rotation(const std::vector<Frame> &v,
@@ -417,7 +409,9 @@ void deduce_center_of_rotation(const std::vector<Frame> &v,
     p1after[1] = (p1before[1] + p1after[1]) / 2;
     p2after[0] = (p2before[0] + p2after[0]) / 2;
     p2after[1] = (p2before[1] + p2after[1]) / 2;
-    intersectLines(p1after, vx1, p2after, vx2, result);
+    const bool success = intersectLines(p1after, vx1, p2after, vx2, result);
+    if (!success)
+      do_error("Could not deduce center of rotation! Migrating patterns are not yet supported.");
     cx = result[0];
     cy = result[1];
 }
