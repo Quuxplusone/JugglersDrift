@@ -43,7 +43,9 @@ struct Circle : public Shape {
 struct LineSegment : public Shape {
     virtual ShapeKind kind() { return SK_LINE_SEGMENT; }
     double angle;
-    LineSegment(const Shape &sh, int x, int y, double a): Shape(sh), angle(a) { cx = x; cy = y; }
+    bool directed;
+    LineSegment(const Shape &sh, int x, int y, double a, bool d):
+        Shape(sh), angle(a), directed(d) { cx = x; cy = y; }
 };
 
 std::vector<Shape*> find_shapes_in_image(unsigned char (*im)[3], int w, int h);

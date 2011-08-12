@@ -63,6 +63,7 @@ int UnionFind::findparent(int a)
     return a;
 }
 
+#include <stdio.h>
 Shape *copy_and_classify(const Shape &sh)
 {
     /* Compute center of mass. */
@@ -113,7 +114,35 @@ Shape *copy_and_classify(const Shape &sh)
         ang /= count; ang -= 1.0;
         ang2 /= count; ang2 -= 2.0;
         if (fabs(ang - M_PI/2) < 0.1) { ang = ang2; }
-        return new LineSegment(sh, cx, cy, ang);
+
+        /* If the segment has a heavier knob on one end, then we should
+         * treat it as an arrow pointing in the heavier direction. */
+        double max_r2_in_pos_direction = 0.0;
+        double max_r2_in_neg_direction = 0.0;
+        for (int i=0; i < (int)sh.pixels.size(); ++i) {
+            double dy = sh.pixels[i].y - cy;
+            double dx = sh.pixels[i].x - cx;
+            double r2 = dx*dx + dy*dy;
+            if (r2 < 4.0) continue;
+            double a = atan2(dy, dx);
+            double da = (a - ang);
+            while (da < -M_PI) da += 2*M_PI;
+            while (da > M_PI) da -= 2*M_PI;
+            da = fabs(da);
+            if (da < 0.5 && r2 > max_r2_in_pos_direction) {
+                max_r2_in_pos_direction = r2;
+            } else if (da > M_PI-0.5 && r2 > max_r2_in_neg_direction) {
+                max_r2_in_neg_direction = r2;
+            }
+        }
+        if (sqrt(max_r2_in_pos_direction) > 4+sqrt(max_r2_in_neg_direction)) {
+            ang += ((ang > M_PI) ? -M_PI : M_PI);
+            return new LineSegment(sh, cx, cy, ang, /*directed=*/true);
+        } else if (sqrt(max_r2_in_neg_direction) > 4+sqrt(max_r2_in_pos_direction)) {
+            return new LineSegment(sh, cx, cy, ang, /*directed=*/true);
+        } else {
+            return new LineSegment(sh, cx, cy, ang, /*directed=*/false);
+        }
     }
 
     return new UnknownShape(sh, cx, cy);
