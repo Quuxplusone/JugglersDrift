@@ -154,6 +154,18 @@ void printj(const std::vector<Frame> &v)
     }
 }
 
+void draw_ray(unsigned char (*im)[3], int w, int h, const LineSegment &seg)
+{
+    unsigned char color[3] = {0,255,0};
+    for (int i=0; i < 100; ++i) {
+        int a = seg.cx + i*cos(seg.angle);
+        int b = seg.cy + i*sin(seg.angle);
+        if (0 <= a && a < w && 0 <= b && b < h)
+          memcpy(&im[b*w+a], &color, 3);
+    }
+}
+
+
 static double mod_360(double x)
 {
     while (x < 0.0) x += 360.0;
@@ -173,6 +185,7 @@ void process_frame(int t, const char *fname)
      * different kinds of shapes in any legitimate frame:
      * (1) Jugglers: colored (non-grayscale) disks.
      * (2) Passes: black (#000000) line segments connecting jugglers.
+     * The segments may have arrowheads indicating oogle-wise passes.
      * (3) Tracery: light grayscale (>#808080) shapes, okay to ignore.
      * The background of the image must be white (#FFFFFF).
      */
@@ -182,8 +195,19 @@ void process_frame(int t, const char *fname)
     /* Find connected regions of the same color.
      * This routine automatically ignores light-gray tracery. */
     std::vector<Shape*> all_shapes = find_shapes_in_image(im, w, h);
+#if DEBUG_IMAGES
+    for (int si=0; si < (int)all_shapes.size(); ++si) {
+        Shape *sh = all_shapes[si];
+        LineSegment *seg = dynamic_cast<LineSegment*>(sh);
+        assert((sh->kind() == SK_LINE_SEGMENT) == (seg != NULL));
+        if (seg != NULL) {
+            draw_ray(im, w, h, *seg);
+        }
+    }
+    WritePNG("debug-lines.png", im, w, h);
+#endif
     free(im);
-    /* Classify each remaining shape as a juggler or a pass. */
+    /* Every circle in the image represents a juggler. */
     double avg_juggler_radius = 0.0;
     for (int i=0; i < (int)all_shapes.size(); ++i) {
         Shape *sh = all_shapes[i];
@@ -206,13 +230,15 @@ void process_frame(int t, const char *fname)
       do_error("No jugglers found in frame \"%s\"!", fname);
     avg_juggler_radius /= this_frame.jugglers.size();
     this_frame.juggler_radius = avg_juggler_radius;
+    /* Every line segment or arrow in the image represents a pass. */
     for (int si=0; si < (int)all_shapes.size(); ++si) {
         Shape *sh = all_shapes[si];
         LineSegment *seg = dynamic_cast<LineSegment*>(sh);
         assert((sh->kind() == SK_LINE_SEGMENT) == (seg != NULL));
         if (seg != NULL) {
             if (!seg->is_black()) {
-                do_error("Frame \"%s\" contains a non-black line segment!", fname);
+                do_error("Frame \"%s\" contains a non-black %s!",
+                         fname, (seg->directed ? "arrow" : "line segment"));
             } else {
                 const double ang = seg->angle;
                 /* It ought to roughly join two jugglers. See which juggler
@@ -245,15 +271,21 @@ void process_frame(int t, const char *fname)
                    }
                 }
                 if (closest_pos_juggler == NULL && closest_neg_juggler == NULL) {
-                    do_error("One of the black lines in \"%s\" doesn't connect any jugglers!",
-                        fname);
+                    do_error("One of the %s in \"%s\" doesn't connect any jugglers!",
+                        (seg->directed ? "arrows" : "black lines"), fname);
                 } else if (closest_pos_juggler == NULL) {
-                    do_error("One of the black lines in \"%s\" connects juggler %s to empty space!",
-                        fname, closest_neg_juggler->name.c_str());
+                    do_error("One of the %s in \"%s\" connects juggler %s to empty space!",
+                        (seg->directed ? "arrows" : "black lines"), fname,
+                        closest_neg_juggler->name.c_str());
                 } else if (closest_neg_juggler == NULL) {
-                    do_error("One of the black lines in \"%s\" connects juggler %s to empty space!",
-                        fname, closest_pos_juggler->name.c_str());
-                } else if (closest_pos_juggler->is_passing) {
+                    if (seg->directed) {
+                        do_error("One of the arrows in \"%s\" connects empty space to juggler %s!",
+                            fname, closest_pos_juggler->name.c_str());
+                    } else {
+                        do_error("One of the black lines in \"%s\" connects juggler %s to empty space!",
+                            fname, closest_pos_juggler->name.c_str());
+                    }
+                } else if (!seg->directed && closest_pos_juggler->is_passing) {
                     do_error("In \"%s\", juggler %s is passing to %s and %s simultaneously!",
                         fname, closest_pos_juggler->name.c_str(),
                         closest_pos_juggler->to_whom.c_str(), closest_neg_juggler->name.c_str());
@@ -262,8 +294,10 @@ void process_frame(int t, const char *fname)
                         fname, closest_neg_juggler->name.c_str(),
                         closest_neg_juggler->to_whom.c_str(), closest_pos_juggler->name.c_str());
                 } else {
-                    closest_pos_juggler->is_passing = true;
-                    closest_pos_juggler->to_whom = closest_neg_juggler->name;
+                    if (!seg->directed) {
+                        closest_pos_juggler->is_passing = true;
+                        closest_pos_juggler->to_whom = closest_neg_juggler->name;
+                    }
                     closest_neg_juggler->is_passing = true;
                     closest_neg_juggler->to_whom = closest_pos_juggler->name;
                 }

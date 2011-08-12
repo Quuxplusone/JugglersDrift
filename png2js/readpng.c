@@ -100,3 +100,49 @@ err_unsupported:
     goto go_return;
 }
 
+
+int WritePNG(const char *fname, unsigned char (*data)[3], int w, int h)
+{
+    FILE *fp = fopen(fname, "wb");
+    png_structp png_ptr = NULL;
+    png_infop info_ptr = NULL;
+    int j;
+    int rc = 0;
+
+    if (fp == NULL)
+      return -1;
+
+    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, 0, 0, 0);
+    if (png_ptr == NULL) goto err_nomem;
+
+    info_ptr = png_create_info_struct(png_ptr);
+    if (info_ptr == NULL) goto err_nomem;
+
+    if (setjmp(png_jmpbuf(png_ptr))) goto err_corrupt;
+    png_init_io(png_ptr, fp);
+
+    /* Write all the needed chunks up to but excluding IDAT. */
+    png_set_IHDR(png_ptr, info_ptr, w, h, /*rgb_bits=*/8,
+       PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+       PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    png_write_info(png_ptr, info_ptr);
+
+    for (j=0; j < h; ++j) {
+        png_write_row(png_ptr, (unsigned char*)&data[j*w+0]);
+    }
+    png_write_end(png_ptr, NULL);
+
+go_return:
+    png_destroy_write_struct(&png_ptr, &info_ptr);
+    fclose(fp);
+    return rc;
+
+err_corrupt:
+    rc = -2;
+    free(data);
+    goto go_return;
+err_nomem:
+    rc = -3;
+    free(data);
+    goto go_return;
+}
