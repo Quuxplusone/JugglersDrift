@@ -94,26 +94,45 @@ Shape *copy_and_classify(const Shape &sh)
         /* Since the shape is connected, area must be at least proportional
          * to radius; but if it's consistent with a 6*D rectangle, then
          * we're probably dealing with a line segment. */
-        double ang = 0, ang2 = 0;
-        int count = 0;
-        for (int i=0; i < (int)sh.pixels.size(); ++i) {
-            double dy = sh.pixels[i].y - cy;
-            double dx = sh.pixels[i].x - cx;
-            if (dx*dx + dy*dy <= radius*radius / 2.0) continue;
-            double a = atan2(dy, dx);
-            a += 1.0;  // TODO FIXME BUG HACK
-            double a2 = a+1.0;
-            while (a < 0) a += M_PI;
-            while (a > M_PI) a -= M_PI;
-            while (a2 < 0) a2 += M_PI;
-            while (a2 > M_PI) a2 -= M_PI;
-            ang += a;
-            ang2 += a2;
-            count += 1;
+        /* Use the Hough transform. For each pixel in the area, convert it
+         * to a set of 180 points in (r,theta) space, and record those
+         * points in the vector all_rs[theta].
+         * Then whichever theta has the lowest standard deviation will be
+         * taken as the direction of the line. */
+        std::vector<double> all_rs[180];
+        const int npixels = sh.pixels.size();
+        for (int theta=0; theta < 180; ++theta) {
+            all_rs[theta].resize(npixels);
+            /* cos_theta is really cos(theta+90), and so on. */
+            const double cos_theta = -sin(theta*M_PI/180);
+            const double sin_theta = cos(theta*M_PI/180);
+            for (int i=0; i < npixels; ++i) {
+                double r = sh.pixels[i].x * cos_theta
+                         + sh.pixels[i].y * sin_theta;
+                all_rs[theta][i] = r;
+            }
         }
-        ang /= count; ang -= 1.0;
-        ang2 /= count; ang2 -= 2.0;
-        if (fabs(ang - M_PI/2) < 0.1) { ang = ang2; }
+        /* Compute standard deviation for all 180 values of theta. */
+        double mean[180] = {0};
+        double variance[180] = {0};
+        for (int theta=0; theta < 180; ++theta) {
+            for (int i=0; i < npixels; ++i)
+              mean[theta] += all_rs[theta][i];
+            mean[theta] /= npixels;
+            for (int i=0; i < npixels; ++i) {
+                const double d = all_rs[theta][i] - mean[theta];
+                variance[theta] += d*d;
+            }
+            variance[theta] /= npixels;
+        }
+        /* The theta with the lowest variance is the winner! */
+        int min_variance_theta = 0;
+        for (int theta=0; theta < 180; ++theta) {
+            if (variance[theta] < variance[min_variance_theta])
+              min_variance_theta = theta;
+        }
+
+        double ang = min_variance_theta * M_PI/180;
 
         /* If the segment has a heavier knob on one end, then we should
          * treat it as an arrow pointing in the heavier direction. */
