@@ -44,14 +44,17 @@ following graphical elements:
     color (e.g., "Alice is #FF0000, Bob is #FF8000"). Each frame must include
     all of the jugglers; you can't add new jugglers in the middle of a
     sequence, nor can you make old ones vanish.
-  - Zero or more "passes", represented as black line segments which, if
-    extended to infinity, would intersect the pair of juggler disks (one in
-    each direction) representing the two jugglers who are exchanging passes
-    on this beat. One frame may contain anywhere from zero up to N/2 passes,
-    but no juggler is allowed to be the target of two passes simultaneously.
-    In other words, the current version doesn't support "oogle" patterns.
-    Be sure that each of your black lines is thick enough to be treated as
-    one connected region!
+  - Zero or more "passes", represented as black line segments. A line
+    segment linking two jugglers A and B represents an exchange in which
+    A passes to B and B simultaneously passes to A. If the line segment
+    has an arrowhead on one end, then it represents an "ooglewise" pass:
+    an arrow from A to B represents a pass from A to B.
+    One frame may contain anywhere from zero up to N/2 passes, but no
+    juggler is allowed to be the source of two passes simultaneously,
+    nor the target of two passes simultaneously. In other words, the
+    current version supports oogles but not simuls.
+    Be sure that each of your black lines is thick enough to be treated
+    as one connected region!
   - Nothing else. No extraneous shapes are allowed in any frame.
 
 Each frame represents what's happening on a single beat: the first frame
