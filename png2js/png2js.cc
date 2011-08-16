@@ -143,20 +143,8 @@ void Frame::permute_jugglers(const std::vector<int> &p)
 
 std::vector<Frame> g_Frames;
 
-void printj(const std::vector<Frame> &v)
-{
-    for (int i=0; i < (int)v.size(); ++i) {
-        printf("(Frame %d.)", i);
-        const int nJugglers = v[i].jugglers.size();
-        for (int j=0; j < nJugglers; ++j) {
-            const FrameJuggler &fj = v[i].jugglers[j];
-            printf(fj.is_passing ? "  %s (p=%s)" : "  %s", fj.name.c_str(), fj.to_whom.c_str());
-        }
-        printf("\n");
-    }
-}
-
-void draw_ray(unsigned char (*im)[3], int w, int h, const LineSegment &seg)
+#if DEBUG_IMAGES
+static void draw_ray(unsigned char (*im)[3], int w, int h, const LineSegment &seg)
 {
     unsigned char color[3] = {0,255,0};
     for (int i=0; i < 100; ++i) {
@@ -166,7 +154,7 @@ void draw_ray(unsigned char (*im)[3], int w, int h, const LineSegment &seg)
           memcpy(&im[b*w+a], &color, 3);
     }
 }
-
+#endif /* DEBUG_IMAGES */
 
 static double mod_360(double x)
 {
@@ -207,7 +195,7 @@ void process_frame(int t, const char *fname)
         }
     }
     WritePNG("debug-lines.png", im, w, h);
-#endif
+#endif /* DEBUG_IMAGES */
     free(im);
     /* Every circle in the image represents a juggler. */
     double avg_juggler_radius = 0.0;
@@ -516,13 +504,6 @@ void splice_pattern()
     if (total_spins <= 0)
       do_error("We can only handle up to 5 spin-splices; maybe try a different --join= argument?");
 
-#if 0
-printf("total_rotations=%d\n", total_rotations);
-printf("total_spins=%d\n", total_spins);
-printf("Original sequence:\n");
-printj(g_Frames);
-#endif
-
     double tx, ty;  /* translation amounts */
     double cx, cy;  /* center of rotation */
     deduce_center_of_rotation(g_Frames, nearest_juggler, cx, cy, tx, ty);
@@ -545,12 +526,6 @@ printj(g_Frames);
         currentPerm = newPerm;
     }
   }
-
-#if 0
-printf("Rotated-and-spliced sequence:\n");
-printj(g_Frames);
-#endif
-
     /* Now spin-and-splice the pattern "total_spins" times. */
   {
     std::vector<Frame> originalFrames = g_Frames;
@@ -570,12 +545,6 @@ printj(g_Frames);
 
     TRANSLATION_X = total_rotations*total_spins*tx;
     TRANSLATION_Y = total_rotations*total_spins*ty;
-
-#if 0
-printf("Spun-and-spliced sequence:\n");
-printj(g_Frames);
-#endif
-
 }
 
 void infer_facings()
