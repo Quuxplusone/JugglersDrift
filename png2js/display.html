@@ -43,6 +43,7 @@ if (can.getContext) {
 
 var BPM = 100; // 100 juggling beats per minute
 var FPS = 10;  // 20 frames per second
+var EndOfPatternTranslation = [0,0];  // the pattern doesn't drift (by default)
 </script>
 <script type="text/javascript" src="pattern.js"></script>
 <script type="text/javascript">
@@ -61,7 +62,11 @@ for (var j in Jugglers) {
         // Interpolate between the two given positions.
         var ts_diff = this.ts[i+1] - this.ts[i];
         var p = (timestep - this.ts[i]) / ts_diff;
-        return [interpolate(p, this.x[i], this.x[i+1]), interpolate(p, this.y[i], this.y[i+1])];
+        var x = interpolate(p, this.x[i], this.x[i+1]);
+        var y = interpolate(p, this.y[i], this.y[i+1]);
+        x += interpolate(timestep/PatternLengthInBeats, 0, -EndOfPatternTranslation[0]);
+        y += interpolate(timestep/PatternLengthInBeats, 0, -EndOfPatternTranslation[1]);
+        return [x,y];
       }
     }
     document.write('Jugglers['+j+'].pos_at('+timestep+') failed! ');

@@ -26,6 +26,8 @@ static int BPM = 100;
 static int FPS = 20;
 static int COUNT = 2;
 static double JOINING_SPIN = 0.0;
+static double TRANSLATION_X = 0.0;
+static double TRANSLATION_Y = 0.0;
 static bool DO_SPLICE = false;
 
 struct FrameJuggler {
@@ -416,7 +418,8 @@ bool intersectLines(const double p1[2], const double v1[2],
 
 void deduce_center_of_rotation(const std::vector<Frame> &v,
                                const std::vector<int> &p,
-                               double &cx, double &cy)
+                               double &cx, double &cy,
+                               double &tx, double &ty)
 {
     double p1before[2] = { v[0].jugglers[p[0]].x, v[0].jugglers[p[0]].y };
     double p2before[2] = { v[0].jugglers[p[1]].x, v[0].jugglers[p[1]].y };
@@ -444,10 +447,18 @@ void deduce_center_of_rotation(const std::vector<Frame> &v,
     p2after[0] = (p2before[0] + p2after[0]) / 2;
     p2after[1] = (p2before[1] + p2after[1]) / 2;
     const bool success = intersectLines(p1after, vx1, p2after, vx2, result);
-    if (!success)
-      do_error("Could not deduce center of rotation! Migrating patterns are not yet supported.");
-    cx = result[0];
-    cy = result[1];
+    if (!success) {
+        /* The two points moved exactly parallel to each other.
+         * Therefore this can be described as a sliding translation. */
+        cx = 0.0; cy = 0.0;
+        tx = v1[0]; ty = v1[1];
+    } else {
+        /* The normals to the two jugglers' overall movement intersect
+         * at the center of rotation. We don't need to bring sliding
+         * translation into it at all. */
+        cx = result[0]; cy = result[1];
+        tx = 0.0; ty = 0.0;
+    }
 }
 
 void splice_pattern()
@@ -512,8 +523,9 @@ printf("Original sequence:\n");
 printj(g_Frames);
 #endif
 
-    double cx, cy;
-    deduce_center_of_rotation(g_Frames, nearest_juggler, cx, cy);
+    double tx, ty;  /* translation amounts */
+    double cx, cy;  /* center of rotation */
+    deduce_center_of_rotation(g_Frames, nearest_juggler, cx, cy, tx, ty);
 
     /* Rotate-and-splice the pattern "total_rotations" times. */
   {
@@ -523,6 +535,7 @@ printj(g_Frames);
         std::vector<Frame> v = originalFrames;
         for (int t=0; t < (int)originalFrames.size(); ++t) {
             v[t].spin_clockwise(i*JOINING_SPIN, cx, cy);
+            v[t].slide(i*tx, i*ty);
             v[t].permute_jugglers(currentPerm);
         }
         g_Frames.insert(g_Frames.end(), v.begin()+1, v.end());
@@ -543,15 +556,20 @@ printj(g_Frames);
     std::vector<Frame> originalFrames = g_Frames;
     for (int i=1; i < total_spins; ++i) {
         std::vector<Frame> v = originalFrames;
-        for (int t=0; t < (int)originalFrames.size(); ++t)
-          v[t].spin_clockwise(i*total_rotations*JOINING_SPIN, cx, cy);
+        for (int t=0; t < (int)originalFrames.size(); ++t) {
+            v[t].spin_clockwise(i*total_rotations*JOINING_SPIN, cx, cy);
+            v[t].slide(i*total_rotations*tx, i*total_rotations*ty);
+        }
         g_Frames.insert(g_Frames.end(), v.begin()+1, v.end());
     }
   }
 
-  /* And remove the last frame, so that the final transition from
-   * [n-1] back to [0] works smoothly. */
-  g_Frames.resize(g_Frames.size()-1);
+    /* And remove the last frame, so that the final transition from
+     * [n-1] back to [0] works smoothly. */
+    g_Frames.resize(g_Frames.size()-1);
+
+    TRANSLATION_X = total_rotations*total_spins*tx;
+    TRANSLATION_Y = total_rotations*total_spins*ty;
 
 #if 0
 printf("Spun-and-spliced sequence:\n");
@@ -621,19 +639,19 @@ void output()
         printf("     ts: [");
         for (int t=0; t < nBeats+1; ++t)
           printf("%d, ", t*COUNT);
-        printf(" ],\n");
+        printf("],\n");
         printf("      x: [");
-        for (int t=0; t < nBeats+1; ++t)
-          printf("%1.1f, ", g_Frames[t%nBeats].jugglers[ji].x);
-        printf(" ],\n");
+        for (int t=0; t < nBeats; ++t)
+          printf("%.1f, ", g_Frames[t].jugglers[ji].x);
+        printf("%.1f ],\n", g_Frames[0].jugglers[ji].x + TRANSLATION_X);
         printf("      y: [");
-        for (int t=0; t < nBeats+1; ++t)
-          printf("%1.1f, ", g_Frames[t%nBeats].jugglers[ji].y);
-        printf(" ],\n");
+        for (int t=0; t < nBeats; ++t)
+          printf("%.1f, ", g_Frames[t].jugglers[ji].y);
+        printf("%.1f ],\n", g_Frames[0].jugglers[ji].y + TRANSLATION_Y);
         printf("      fa: [");
-        for (int t=0; t < nBeats+1; ++t)
-          printf("%1.1f, ", g_Frames[t%nBeats].jugglers[ji].facing);
-        printf(" ] },\n");
+        for (int t=0; t < nBeats; ++t)
+          printf("%.1f, ", g_Frames[t].jugglers[ji].facing);
+        printf("%.1f ] },\n", g_Frames[0].jugglers[ji].facing);
     }
     printf("];\n");
     printf("var Passes = [\n");
@@ -665,6 +683,9 @@ void output()
     printf("];\n");
     printf("BPM=%d;\n", BPM);
     printf("FPS=%d;\n", FPS);
+    if (TRANSLATION_X != 0.0 || TRANSLATION_Y != 0.0) {
+        printf("EndOfPatternTranslation=[%.1f,%.1f];\n", TRANSLATION_X, TRANSLATION_Y);
+    }
 }
 
 void do_help()
