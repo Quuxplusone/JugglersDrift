@@ -163,7 +163,7 @@ static double mod_360(double x)
     return x;
 }
 
-void process_frame(int t, const char *fname)
+void process_frame(const char *fname)
 {
     unsigned char (*im)[3] = NULL;
     int w, h;
@@ -179,7 +179,6 @@ void process_frame(int t, const char *fname)
      * (3) Tracery: light grayscale (>#808080) shapes, okay to ignore.
      * The background of the image must be white (#FFFFFF).
      */
-    assert(t == (int)g_Frames.size());
     g_Frames.push_back(Frame(fname));
     Frame &this_frame = g_Frames.back();
     /* Find connected regions of the same color.
@@ -693,7 +692,7 @@ int main(int argc, char **argv)
         do_error("Only one input image provided!");
     }
     for (int t = 0; i+t < argc; ++t) {
-        process_frame(t, argv[i+t]);
+        process_frame(argv[i+t]);
     }
     sort_and_sanity_check();
     if (DO_SPLICE)
