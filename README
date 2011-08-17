@@ -21,18 +21,20 @@ My ultimate goal is to have a polished open-source juggling simulator
 comparable to JoePass!, but without the complications and crashes. It should
 be able to display single-person siteswaps; multi-person stationary patterns;
 runarounds; patterns containing doubles; patterns containing jims and zips;
-"oogles"; and patterns with holes (e.g. Shooting Star). For describing
-patterns, it should accept text input files in something very close to
-established MHN siteswap notation. For describing the footwork, I've been
-toying with the idea of something like Metafont, where you could just specify
-a few points on the path and have the software fill in some nice-looking
-splines, but that might be unwieldy, not to mention hard to implement.
+"oogles"; patterns with holes (e.g. Shooting Star); patterns with extra clubs
+(e.g. French Three-Count); and extensible patterns (e.g. Feast or Line Feed).
+For describing patterns, it should accept text input files in something very
+close to established MHN siteswap notation. For describing the footwork, I've
+been toying with the idea of something like Metafont, where you could just
+specify a few points on the path and have the software fill in some
+nice-looking splines, but that might be unwieldy, not to mention hard to
+implement.
 
-Right now (2011-07-27), what I've got is a program called "png2js" that
-takes a sequence of PNG "frames" and outputs (to standard output) a bit of
-Javascript that you can plug into png2js/display.html to get a 2D animated
-bird's-eye view of the pattern described by the frame sequence. You need
-a Web browser that supports HTML5 Canvas, and Javascript must be enabled.
+Right now (2011-08-17), what I've got is a program called "png2js" that
+takes a sequence of PNG "frames" and outputs a bit of Javascript that you
+can plug into png2js/display.html to get a 2D animated bird's-eye view of
+the pattern described by the frame sequence. You need a Web browser that
+supports HTML5 Canvas, and Javascript must be enabled.
 
 Each "frame" must be a 3-channel (RGB) image in PNG format containing the
 following graphical elements:
@@ -75,7 +77,19 @@ a fraction of the frames. If the first frame is equivalent to the last
 frame rotated clockwise by N degrees (modulo some permutation of the
 jugglers' roles), then "--join=N" will generate the full animation.
 
-    ./png2js --join=120 ../png-patterns/Havana/0[123456].png >pattern.js
-    ./png2js --join=120 ../png-patterns/5pHavana/10[123456].png >pattern.js
-    ./png2js --join=0 ../png-patterns/5pHavana/1* ../png-patterns/5pHavana/201.png >pattern.js
+If the --join= option is passed, and the first frame is equivalent to
+the last frame rotated by N degrees and then slid by some amount
+(for example, see Morgan's Turbo Reel below), then the resulting
+Javascript will include an "EndOfPatternTranslation" term which
+causes the display to scroll steadily as the pattern is animated.
 
+    ./png2js --join=120 ../png-patterns/Havana/0[123456].png >pattern.js
+    ./png2js ../png-patterns/5pHavana/* >pattern.js
+    ./png2js --join=0 ../png-patterns/5pHavana/1* ../png-patterns/5pHavana/201.png >pattern.js
+    ./png2js --join=120 ../png-patterns/5pHavana/10[123456].png >pattern.js
+    ./png2js --join=0 ../png-patterns/MorgansReel/* >pattern.js
+    ./png2js --join=0 --count=3 ../png-patterns/MorgansTurboReel/* >pattern.js
+    ./png2js --count=4 ../png-patterns/RotatingOogle/* >pattern.js
+    ./png2js --join=0 --count=4 ../png-patterns/RotatingOogle/0[123].png >pattern.js
+    ./png2js --join=180 --count=4 ../png-patterns/RotatingOogle/0[12].png >pattern.js
+    ./png2js ../png-patterns/2v5Weave/* >pattern.js
