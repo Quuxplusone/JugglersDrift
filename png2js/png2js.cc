@@ -419,10 +419,12 @@ void deduce_center_of_rotation(const std::vector<Frame> &v,
     if (v1[0] == 0.0 && v1[1] == 0.0) {
         cx = p1before[0];
         cy = p1before[1];
+        tx = 0.0; ty = 0.0;
         return;
     } else if (v2[0] == 0.0 && v2[1] == 0.0) {
         cx = p2before[0];
         cy = p2before[1];
+        tx = 0.0; ty = 0.0;
         return;
     }
 
