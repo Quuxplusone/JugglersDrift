@@ -63,7 +63,7 @@ int UnionFind::findparent(int a)
     return a;
 }
 
-#include <stdio.h>
+
 Shape *copy_and_classify(const Shape &sh)
 {
     /* Compute center of mass. */
@@ -94,70 +94,51 @@ Shape *copy_and_classify(const Shape &sh)
         /* Since the shape is connected, area must be at least proportional
          * to radius; but if it's consistent with a 6*D rectangle, then
          * we're probably dealing with a line segment. */
-        /* Use the Hough transform. For each pixel in the area, convert it
-         * to a set of 180 points in (r,theta) space, and record those
-         * points in the vector all_rs[theta].
-         * Then whichever theta has the lowest standard deviation will be
-         * taken as the direction of the line. */
-        std::vector<double> all_rs[180];
+        /* Find the farthest pixel from the center. */
         const int npixels = sh.pixels.size();
-        for (int theta=0; theta < 180; ++theta) {
-            all_rs[theta].resize(npixels);
-            /* cos_theta is really cos(theta+90), and so on. */
-            const double cos_theta = -sin(theta*M_PI/180);
-            const double sin_theta = cos(theta*M_PI/180);
-            for (int i=0; i < npixels; ++i) {
-                double r = sh.pixels[i].x * cos_theta
-                         + sh.pixels[i].y * sin_theta;
-                all_rs[theta][i] = r;
+        assert(npixels > 0);
+        double max_d2 = 0.0;
+        double max_x = 0.0, max_y = 0.0;
+        for (int i=0; i < npixels; ++i) {
+            const double dx = sh.pixels[i].x - cx;
+            const double dy = sh.pixels[i].y - cy;
+            const double d2 = dx*dx + dy*dy;
+            if (d2 > max_d2) {
+                max_d2 = d2;
+                max_x = sh.pixels[i].x;
+                max_y = sh.pixels[i].y;
             }
         }
-        /* Compute standard deviation for all 180 values of theta. */
-        double mean[180] = {0};
-        double variance[180] = {0};
-        for (int theta=0; theta < 180; ++theta) {
-            for (int i=0; i < npixels; ++i)
-              mean[theta] += all_rs[theta][i];
-            mean[theta] /= npixels;
-            for (int i=0; i < npixels; ++i) {
-                const double d = all_rs[theta][i] - mean[theta];
-                variance[theta] += d*d;
-            }
-            variance[theta] /= npixels;
-        }
-        /* The theta with the lowest variance is the winner! */
-        int min_variance_theta = 0;
-        for (int theta=0; theta < 180; ++theta) {
-            if (variance[theta] < variance[min_variance_theta])
-              min_variance_theta = theta;
-        }
-
-        double ang = min_variance_theta * M_PI/180;
-
-        /* If the segment has a heavier knob on one end, then we should
-         * treat it as an arrow pointing in the heavier direction. */
-        double max_r2_in_pos_direction = 0.0;
-        double max_r2_in_neg_direction = 0.0;
-        for (int i=0; i < (int)sh.pixels.size(); ++i) {
-            double dy = sh.pixels[i].y - cy;
-            double dx = sh.pixels[i].x - cx;
-            double r2 = dx*dx + dy*dy;
-            if (r2 < 4.0) continue;
-            double a = atan2(dy, dx);
-            double da = (a - ang);
-            while (da < -M_PI) da += 2*M_PI;
-            while (da > M_PI) da -= 2*M_PI;
-            da = fabs(da);
-            if (da < 0.5 && r2 > max_r2_in_pos_direction) {
-                max_r2_in_pos_direction = r2;
-            } else if (da > M_PI-0.5 && r2 > max_r2_in_neg_direction) {
-                max_r2_in_neg_direction = r2;
+        assert(max_d2 > 0.0);
+        /* Find the farthest pixel from the one we just found.
+         * It'll be the other end of the line. */
+        double diameter2 = 0.0;
+        double other_max_x = 0.0, other_max_y = 0.0;
+        for (int i=0; i < npixels; ++i) {
+            const double dx = sh.pixels[i].x - max_x;
+            const double dy = sh.pixels[i].y - max_y;
+            const double d2 = dx*dx + dy*dy;
+            if (d2 > diameter2) {
+                diameter2 = d2;
+                other_max_x = sh.pixels[i].x;
+                other_max_y = sh.pixels[i].y;
             }
         }
-        if (sqrt(max_r2_in_pos_direction) > 4+sqrt(max_r2_in_neg_direction)) {
+        assert(diameter2 > 0.0);
+        /* The line represented by this shape ought to pass through
+         * the two pixels we just found. */
+        double ang = atan2(max_y - other_max_y, max_x - other_max_x);
+        /* Adjust the center, too. */
+        cx = (max_x + other_max_x)/2;
+        cy = (max_y + other_max_y)/2;
+        /* If the segment has a heavier knob on one end (i.e., if one
+         * endpoint is significantly closer to the original center of mass
+         * than the other endpoint), then we should treat it as an arrow
+         * pointing in the heavier (i.e., shorter) direction. */
+        if (sqrt(max_d2) > 0.5*sqrt(diameter2) + 2) {
             ang += ((ang > M_PI) ? -M_PI : M_PI);
             return new LineSegment(sh, cx, cy, ang, /*directed=*/true);
-        } else if (sqrt(max_r2_in_neg_direction) > 4+sqrt(max_r2_in_pos_direction)) {
+        } else if (sqrt(max_d2) < 0.5*sqrt(diameter2) - 2) {
             return new LineSegment(sh, cx, cy, ang, /*directed=*/true);
         } else {
             return new LineSegment(sh, cx, cy, ang, /*directed=*/false);
