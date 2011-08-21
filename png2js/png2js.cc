@@ -633,12 +633,12 @@ void output()
             if (j.is_passing) {
                 const int who = g_Frames[t%nBeats].getJugglerIdx(j.to_whom);
                 assert(who != -1);
-                printf("  { start: %d, end: %f, from: %d, fromhand: '%c',"
+                printf("  { start: %d, end: %.1f, from: %d, fromhand: '%c',"
                                                  " to: %d, tohand: '%c' },\n",
                     COUNT*t, COUNT*t+1.3, ji, fromhand, who, tohand);
             } else {
                 /* Explicitly insert a self. */
-                printf("  { start: %d, end: %f, from: %d, fromhand: '%c',"
+                printf("  { start: %d, end: %.1f, from: %d, fromhand: '%c',"
                                                  " to: %d, tohand: '%c' },\n",
                     COUNT*t, COUNT*t+1.3, ji, fromhand, ji, tohand);
             }
@@ -650,7 +650,7 @@ void output()
         const char fromhand = ((t % 2) ? 'l' : 'r');
         const char tohand = ((t % 2) ? 'r' : 'l');
         for (int ji=0; ji < nJugglers; ++ji) {
-            printf("  { start: %d, end: %f, from: %d, fromhand: '%c',"
+            printf("  { start: %d, end: %.1f, from: %d, fromhand: '%c',"
                                              " to: %d, tohand: '%c' },\n",
                 t, t+1.3, ji, fromhand, ji, tohand);
         }
