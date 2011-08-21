@@ -628,26 +628,31 @@ void output()
     for (int t=0; t < nBeats+1; ++t) {
         for (int ji=0; ji < nJugglers; ++ji) {
             const FrameJuggler &j = g_Frames[t%nBeats].jugglers[ji];
+            const char fromhand = ((COUNT*t % 2) ? 'l' : 'r');
+            const char tohand = ((COUNT*t % 2) ? 'r' : 'l');
             if (j.is_passing) {
                 const int who = g_Frames[t%nBeats].getJugglerIdx(j.to_whom);
                 assert(who != -1);
-                printf("  { start: %d, end: %f, from: %d, to: %d, hand: '%c' },\n",
-                    COUNT*t, COUNT*t+1.3, ji, who,
-                    ((COUNT*t % 2) ? 'l' : 'r'));
+                printf("  { start: %d, end: %f, from: %d, fromhand: '%c',"
+                                                 " to: %d, tohand: '%c' },\n",
+                    COUNT*t, COUNT*t+1.3, ji, fromhand, who, tohand);
             } else {
                 /* Explicitly insert a self. */
-                printf("  { start: %d, end: %f, from: %d, to: %d, hand: '%c' },\n",
-                    COUNT*t, COUNT*t+1.3, ji, ji,
-                    ((COUNT*t % 2) ? 'l' : 'r'));
+                printf("  { start: %d, end: %f, from: %d, fromhand: '%c',"
+                                                 " to: %d, tohand: '%c' },\n",
+                    COUNT*t, COUNT*t+1.3, ji, fromhand, ji, tohand);
             }
         }
     }
     /* Explicitly insert the off-count selfs. */
     for (int t=0; t < COUNT*(nBeats+1); ++t) {
         if (t % COUNT == 0) continue;
+        const char fromhand = ((t % 2) ? 'l' : 'r');
+        const char tohand = ((t % 2) ? 'r' : 'l');
         for (int ji=0; ji < nJugglers; ++ji) {
-            printf("  { start: %d, end: %f, from: %d, to: %d, hand: '%c' },\n",
-                t, t+1.3, ji, ji, ((t % 2) ? 'l' : 'r'));
+            printf("  { start: %d, end: %f, from: %d, fromhand: '%c',"
+                                             " to: %d, tohand: '%c' },\n",
+                t, t+1.3, ji, fromhand, ji, tohand);
         }
     }
     printf("];\n");

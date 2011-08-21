@@ -124,9 +124,10 @@ function animate() {
       // interpolated between the given jugglers.
       var ts_diff = pass.end - pass.start;
       var p = (timestep - pass.start) / ts_diff;
-      var rhand = (pass.hand == 'r');
-      var [sx,sy] = Jugglers[pass.from].hand_at(rhand, pass.start);
-      var [ex,ey] = Jugglers[pass.to].hand_at(!rhand, pass.end);
+      var from_rhand = (pass.fromhand == 'r');
+      var to_rhand = (pass.tohand == 'r');
+      var [sx,sy] = Jugglers[pass.from].hand_at(from_rhand, pass.start);
+      var [ex,ey] = Jugglers[pass.to].hand_at(to_rhand, pass.end);
       club(ctx, interpolate(p,sx,ex), interpolate(p,sy,ey));
     }
   }
