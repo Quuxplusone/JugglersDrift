@@ -93,3 +93,4 @@ causes the display to scroll steadily as the pattern is animated.
     ./png2js --join=0 --count=4 ../png-patterns/RotatingOogle/0[123].png >pattern.js
     ./png2js --join=180 --count=4 ../png-patterns/RotatingOogle/0[12].png >pattern.js
     ./png2js ../png-patterns/2v5Weave/* >pattern.js
+    ./png2js --join=0 --count=1 ../png-patterns/MattsModifiedPretzel/* >pattern.js
