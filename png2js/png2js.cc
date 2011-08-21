@@ -605,16 +605,16 @@ void output()
     printf("var JugglerSize = %d;\n", (int)g_Frames[0].juggler_radius);
     printf("var Jugglers = [\n");
     for (int ji=0; ji < nJugglers; ++ji) {
-        printf(" { name: '%s',\n", g_Frames[0].jugglers[ji].name.c_str());
-        printf("     ts: [");
+        printf(" { color: '%s',\n", g_Frames[0].jugglers[ji].name.c_str());
+        printf("      ts: [");
         for (int t=0; t < nBeats+1; ++t)
           printf("%d, ", t*COUNT);
         printf("],\n");
-        printf("      x: [");
+        printf("       x: [");
         for (int t=0; t < nBeats; ++t)
           printf("%.1f, ", g_Frames[t].jugglers[ji].x);
         printf("%.1f ],\n", g_Frames[0].jugglers[ji].x + TRANSLATION_X);
-        printf("      y: [");
+        printf("       y: [");
         for (int t=0; t < nBeats; ++t)
           printf("%.1f, ", g_Frames[t].jugglers[ji].y);
         printf("%.1f ],\n", g_Frames[0].jugglers[ji].y + TRANSLATION_Y);

@@ -114,7 +114,7 @@ function animate() {
     var jug = Jugglers[j];
     var [x,y] = jug.pos_at(timestep);
     var fa = jug.facing_at(timestep);
-    juggler(ctx, x,y, fa, jug.name);
+    juggler(ctx, x,y, fa, jug.color);
   }
 
   for (var p in Passes) {
