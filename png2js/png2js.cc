@@ -655,6 +655,14 @@ void output()
                 t, t+1.3, ji, fromhand, ji, tohand);
         }
     }
+    /* TODO FIXME BUG HACK: Explicitly insert the holds, too. */
+    for (int t=0; t < COUNT*(nBeats+1)+2; ++t) {
+        const char fromhand = ((t % 2) ? 'l' : 'r');
+        for (int ji=0; ji < nJugglers; ++ji) {
+            printf("  { start: %.1f, end: %d, who: %d, hand: '%c', held: true },\n",
+                t-1.7, t, ji, fromhand);
+        }
+    }
     printf("];\n");
     printf("BPM=%d;\n", BPM);
     printf("FPS=%d;\n", FPS);

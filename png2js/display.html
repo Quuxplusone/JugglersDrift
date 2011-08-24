@@ -119,16 +119,23 @@ function animate() {
 
   for (var p in Passes) {
     var pass = Passes[p];
-    if (pass.start <= timestep && timestep <= pass.end) {
-      // Draw this pass (i.e., this thrown club) at a position
-      // interpolated between the given jugglers.
-      var ts_diff = pass.end - pass.start;
-      var p = (timestep - pass.start) / ts_diff;
-      var from_rhand = (pass.fromhand == 'r');
-      var to_rhand = (pass.tohand == 'r');
-      var [sx,sy] = Jugglers[pass.from].hand_at(from_rhand, pass.start);
-      var [ex,ey] = Jugglers[pass.to].hand_at(to_rhand, pass.end);
-      club(ctx, interpolate(p,sx,ex), interpolate(p,sy,ey));
+    if (pass.start <= timestep && timestep < pass.end) {
+      if (pass.held) {
+        // Draw this held club at the position of the holder's hand.
+        var in_rhand = (pass.hand == 'r');
+        var [x,y] = Jugglers[pass.who].hand_at(in_rhand, timestep);
+        club(ctx, x, y);
+      } else {
+        // Draw this pass (i.e., this thrown club) at a position
+        // interpolated between the given jugglers.
+        var ts_diff = pass.end - pass.start;
+        var p = (timestep - pass.start) / ts_diff;
+        var from_rhand = (pass.fromhand == 'r');
+        var to_rhand = (pass.tohand == 'r');
+        var [sx,sy] = Jugglers[pass.from].hand_at(from_rhand, pass.start);
+        var [ex,ey] = Jugglers[pass.to].hand_at(to_rhand, pass.end);
+        club(ctx, interpolate(p,sx,ex), interpolate(p,sy,ey));
+      }
     }
   }
 
