@@ -90,7 +90,7 @@ Shape *copy_and_classify(const Shape &sh)
         return new Circle(sh, cx, cy, radius);
     }
 
-    if (area < 6*diameter) {
+    if (area < 6*diameter || area < (diameter/20)*diameter) {
         /* Since the shape is connected, area must be at least proportional
          * to radius; but if it's consistent with a 6*D rectangle, then
          * we're probably dealing with a line segment. */
