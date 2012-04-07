@@ -302,7 +302,7 @@ void process_frame(const char *fname)
     }
     if (unhandled_count != 0) {
         do_error("Frame \"%s\" contains %d extraneous shape%s!", fname, unhandled_count,
-            &"s"[unhandled_count!=1]);
+            &"s"[unhandled_count==1]);
     }
 
     /* Since all_shapes[] contains pointers to new'ed objects,
