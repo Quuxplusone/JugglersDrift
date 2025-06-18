@@ -23,8 +23,9 @@ struct Shape {
     virtual ShapeKind kind() { return SK_UNKNOWN; }
     bool is_black() const { return !(color[0] || color[1] || color[2]); }
 
-    Shape() { }
-    Shape(const unsigned char[3]);
+    Shape() = default;
+    virtual ~Shape() = default;
+    explicit Shape(const unsigned char[3]);
     void push_back(int i, int j) {
         pixels.push_back(ShapePixel(i,j));
     }
@@ -37,14 +38,14 @@ struct UnknownShape : public Shape {
 struct Circle : public Shape {
     virtual ShapeKind kind() { return SK_CIRCLE; }
     double radius;
-    Circle(const Shape &sh, int x, int y, int r): Shape(sh), radius(r) { cx = x; cy = y; }
+    explicit Circle(const Shape &sh, int x, int y, int r): Shape(sh), radius(r) { cx = x; cy = y; }
 };
 
 struct LineSegment : public Shape {
     virtual ShapeKind kind() { return SK_LINE_SEGMENT; }
     double angle;
     bool directed;
-    LineSegment(const Shape &sh, int x, int y, double a, bool d):
+    explicit LineSegment(const Shape &sh, int x, int y, double a, bool d):
         Shape(sh), angle(a), directed(d) { cx = x; cy = y; }
 };
 

@@ -97,3 +97,5 @@ causes the display to scroll steadily as the pattern is animated.
     ./png2js --join=0 ../png-patterns/ArthursIVXX/* >pattern.js
     ./png2js --join=0 ../png-patterns/Trefoil/* >pattern.js
     ./png2js --join=0 ../png-patterns/Trefoil2/* >pattern.js
+    ./png2js --join=0 ../png-patterns/IVW/* >pattern.js
+    ./png2js --join=0 --count=1 ../png-patterns/FiveCountWeave/* >pattern.js
